@@ -17,4 +17,8 @@ enable_testing()
 add_executable(mem_table_test src/mem_table.cpp test/mem_table_test.cpp)
 target_link_libraries(mem_table_test gtest gtest_main)
 
+add_executable(db_test src/db.cpp test/db_test.cpp src/file_util.cpp src/mem_table.cpp)
+target_link_libraries(db_test gtest gtest_main)
+
 add_test(NAME mem_table_test COMMAND mem_table_test)
+add_test(NAME db_test COMMAND db_test)
