@@ -10,6 +10,7 @@ TEST(db, test_db_create) {
   ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
   ASSERT_EQ(db->Close(), OK);
   ASSERT_EQ(DB::Destroy(dbname), OK);
+  delete db;
 }
 
 TEST(db, test_db_put_get) {

@@ -11,6 +11,17 @@
 | FOOTER BLOCK     |
 
 
+| Block Format       |
+| ------------------ |
+| ENTRY 0            |
+| ENTRY 1            |
+| ENTRY 2            |
+| RESTART POINT 0    |
+| RESTART POINT 1    |
+| RESTART POINT 2    |
+| RESTART POINTS LEN |
+
+
 | Filter Block Format    |
 | ---------------------- |
 | FILTER 0               |

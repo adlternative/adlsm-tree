@@ -4,13 +4,13 @@ namespace adl {
 Block::Block() : entries_len_(0) {}
 
 RC Block::Add(const string &key, const string &value) {
-  int value_len = value.length();
-  int key_len = key.length();
+  int value_len = (int)value.length();
+  int key_len = (int)key.length();
   int shared_key_len = 0;
   int unshared_key_len;
 
-  if (!(entries_len_ % 12)) {
-    restarts_.push_back(buffer_.size());
+  if (!(entries_len_ % restarts_block_len_)) {
+    restarts_.push_back((int)buffer_.size());
   } else {
     auto min_len = std::min(key_len, (int)last_key_.length());
     /* 寻找当前 key 和 last_key 的共享长度 */
@@ -33,14 +33,29 @@ RC Block::Add(const string &key, const string &value) {
   return OK;
 }
 
-RC Block::Finish(string &ret) {
-  int restarts_len = restarts_.size();
+RC Block::Final(string &result) {
+  /* 添加重启点偏移量及其长度 */
+  int restarts_len = (int)restarts_.size();
   for (int i = 0; i < restarts_len; i++) {
     buffer_.append(reinterpret_cast<char *>(&restarts_[i]), sizeof(int));
   }
   buffer_.append(reinterpret_cast<char *>(&restarts_len), sizeof(int));
-  ret = std::move(buffer_);
+  result = std::move(buffer_);
   return OK;
 }
+
+size_t Block::EstimatedSize() {
+  return buffer_.size() + (restarts_.size() + 1) * sizeof(int);
+}
+
+void Block::Reset() {
+  entries_len_ = 0;
+  buffer_.clear();
+  restarts_.clear();
+  last_key_.clear();
+  return;
+}
+
+bool Block::Empty() { return !entries_len_; }
 
 }  // namespace adl

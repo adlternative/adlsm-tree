@@ -3,11 +3,11 @@
 
 namespace adl {
 
-DB::DB(const string &dbname)
+DB::DB(const string &dbname, const DBOptions &options)
     : dbname_(dbname),
       sequence_id_(0),
-      mem_(new MemTable),
-      imem_(new MemTable),
+      mem_(new MemTable(options)),
+      imem_(new MemTable(options)),
       closed_(false) {}
 
 DB::~DB() {
@@ -16,7 +16,7 @@ DB::~DB() {
   delete imem_;
 }
 
-RC DB::Open(std::string dbname, const DBOptions &options, DB **dbptr) {
+RC DB::Open(const std::string &dbname, const DBOptions &options, DB **dbptr) {
   if (!FileManager::Exists(dbname)) {
     if (options.create_if_not_exists) {
       auto rc = Create(dbname);
@@ -30,7 +30,7 @@ RC DB::Open(std::string dbname, const DBOptions &options, DB **dbptr) {
     return IS_NOT_DIRECTORY;
   }
 
-  DB *db = new DB(dbname);
+  DB *db = new DB(dbname, options);
 
   /* load metadata... */
 
@@ -40,9 +40,11 @@ RC DB::Open(std::string dbname, const DBOptions &options, DB **dbptr) {
   return OK;
 }
 
-RC DB::Create(std::string dbname) { return FileManager::Create(dbname, DIR_); }
+RC DB::Create(const std::string &dbname) {
+  return FileManager::Create(dbname, DIR_);
+}
 
-RC DB::Destroy(std::string dbname) {
+RC DB::Destroy(const std::string &dbname) {
   // stop all services
   return FileManager::Destroy(dbname);
 }
@@ -66,6 +68,13 @@ RC DB::Get(const std::string &key, std::string &value) {
 RC DB::Write(const std::string &key, const std::string &value, OpType op) {
   MemKey mem_key(key, sequence_id_.fetch_add(1), op);
   return mem_->Put(mem_key, value);
+}
+
+RC DB::BuildSSTable() {
+  /* imm --> sstable */
+  imem_->BuildSSTable(dbname_);
+  /* 更新元数据跟踪新 sstable */
+  return OK;
 }
 
 }  // namespace adl

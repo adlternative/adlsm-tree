@@ -27,7 +27,7 @@ TEST(block_test, Add) {
   block.Add("key0", "value");
   block.Add("key1", "value");
   string result;
-  block.Finish(result);
+  block.Final(result);
 
   string expect;
   AppendKV2Expect(expect, 0, 4, 5, "key0", "value");
@@ -43,7 +43,7 @@ TEST(block_test, Add2) {
   block.Add("key1", "value1");
   block.Add("key12", "value12");
   string result;
-  block.Finish(result);
+  block.Final(result);
   string expect;
 
   AppendKV2Expect(expect, 0, 4, 6, "key0", "value0");
@@ -68,7 +68,7 @@ TEST(block_test, Add3) {
 
   EXPECT_EQ(block.EstimatedSize(), 330);
 
-  block.Finish(result);
+  block.Final(result);
   string expect;
 
   AppendKV2Expect(expect, 0, 4, 6, "key0", "value0");   /* 12 + 4 + 6 */
@@ -89,4 +89,25 @@ TEST(block_test, Add3) {
   AppendKV2Expect(expect, 4, 1, 7, "key15", "value15"); /* 12 + 1 + 7 */
   AppendRS2Expect(expect, {0, 234});
   EXPECT_EQ(result, expect);
+}
+
+TEST(block_test, Add4) {
+  using namespace adl;
+  Block block;
+  block.Add("key0", "value");
+  block.Add("key1", "value");
+  string result;
+  block.Final(result);
+  string result2;
+  block.Reset();
+  block.Add("key0", "value");
+  block.Add("key1", "value");
+  block.Final(result2);
+
+  string expect;
+  AppendKV2Expect(expect, 0, 4, 5, "key0", "value");
+  AppendKV2Expect(expect, 3, 1, 5, "key1", "value");
+  AppendRS2Expect(expect, {0});
+  EXPECT_EQ(result, expect);
+  EXPECT_EQ(result, result2);
 }

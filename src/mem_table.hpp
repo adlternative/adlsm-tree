@@ -1,6 +1,7 @@
 #ifndef ADL_LSM_TREE_MEM_TABLE_H__
 #define ADL_LSM_TREE_MEM_TABLE_H__
 
+#include <string.h>
 #include <map>
 #include <string>
 #include "rc.hpp"
@@ -33,28 +34,35 @@ struct MemKey {
     }
     return user_key_ < other.user_key_;
   }
+  string ToKey() {
+    string ret(user_key_);
+    char temp[8];
+    memcpy(temp, &seq_, 8);
+    ret.append(temp, 8);
+    memcpy(temp, &op_type_, 1);
+    return ret;
+  }
 
+  /* user_key 绑定最大序列号作为查询的依据 */
   static MemKey NewMinKey(const string &uk) {
     MemKey m(string(uk), INT64_MAX, OP_PUT);
     return m;
   }
 };
 
+struct DBOptions;
 class MemTable {
  public:
-  MemTable() = default;
-  ~MemTable() = default;
-
+  MemTable(const DBOptions &options);
   RC Put(const MemKey &key, const string &value);
-  // RC Delete(const MemKey &key, const string &value);
-  // RC Update(const MemKey &key, const string &value);
   RC Get(const string &key, string &value);
+  RC BuildSSTable(const string &dbname);
 
  private:
   size_t keys_size_;
   size_t vals_size_;
   /* mutable std::mutex mu_;  */
-
+  const DBOptions *options_;
   map<MemKey, string> table_;
 };
 

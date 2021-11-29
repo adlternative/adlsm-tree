@@ -4,22 +4,22 @@
 #include <atomic>
 #include <string>
 #include "mem_table.hpp"
+#include "options.hpp"
 #include "rc.hpp"
 
 namespace adl {
 
-struct DBOptions {
-  bool create_if_not_exists = false;
-};
-
 class DB {
  public:
-  DB(const string &dp_path);
+  DB(const string &dp_path, const DBOptions &options);
   ~DB();
+  DB(const DB &) = delete;
+  DB &operator=(const DB &) = delete;
 
-  static RC Open(std::string dbname, const DBOptions &options, DB **dbptr);
-  static RC Create(std::string dbname);
-  static RC Destroy(std::string dbname);
+  static RC Open(const std::string &dbname, const DBOptions &options,
+                 DB **dbptr);
+  static RC Create(const std::string &dbname);
+  static RC Destroy(const std::string &dbname);
   RC Close();
 
   RC Put(const std::string &key, const std::string &value);
@@ -29,6 +29,8 @@ class DB {
 
  private:
   RC Write(const std::string &key, const std::string &value, OpType op);
+
+  RC BuildSSTable();
 
   /* memory */
   MemTable *mem_;
@@ -40,7 +42,7 @@ class DB {
 
   /* disk */
   string dbname_;
-
+  DBOptions options;
   /* metadata */
 };
 

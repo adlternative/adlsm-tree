@@ -10,15 +10,34 @@ using namespace std;
 
 class Block {
  public:
+  static constexpr unsigned int restarts_block_len_ = 12;
   Block();
   RC Add(const string &key, const string &value);
-  RC Finish(string &ret);
+  RC Final(string &result);
+  size_t EstimatedSize();
+  void Reset();
+  bool Empty();
 
  private:
   std::vector<int> restarts_;  //  重启点
   string last_key_;
   int entries_len_;
   string buffer_;
+};
+
+struct BlockHandle {
+  int block_offset_ = 0;
+  int block_size_ = 0;
+
+  void EncodeMeta(string &ret) {
+    ret.append((char *)&block_offset_, sizeof(int));
+    ret.append((char *)&block_size_, sizeof(int));
+  }
+
+  void SetMeta(int block_offset, int block_size) {
+    block_offset_ = block_offset;
+    block_size_ = block_size;
+  }
 };
 
 }  // namespace adl

@@ -1,9 +1,11 @@
 #include "../src/mem_table.hpp"
 #include <gtest/gtest.h>
+#include "../src/options.hpp"
 
 TEST(mem_table_test, PutAndGet1) {
   using namespace adl;
-  MemTable table;
+  DBOptions opts;
+  MemTable table(opts);
   string user_key("key");
   MemKey key(user_key, 1, OP_PUT);
   string val;
@@ -14,7 +16,8 @@ TEST(mem_table_test, PutAndGet1) {
 
 TEST(mem_table_test, PutAndGet) {
   using namespace adl;
-  MemTable table;
+  DBOptions opts;
+  MemTable table(opts);
   string val;
   MemKey key1("key", 1, OP_PUT);
   ASSERT_EQ(table.Put(key1, "value1"), OK) << "put error";
@@ -26,7 +29,8 @@ TEST(mem_table_test, PutAndGet) {
 
 TEST(mem_table_test, PutAndGet3) {
   using namespace adl;
-  MemTable table;
+  DBOptions opts;
+  MemTable table(opts);
   string val;
   MemKey key1("key", 1, OP_PUT);
   ASSERT_EQ(table.Put(key1, "value1"), OK) << "put error";
@@ -39,7 +43,8 @@ TEST(mem_table_test, PutAndGet3) {
 
 TEST(mem_table_test, PutAndGet4) {
   using namespace adl;
-  MemTable table;
+  DBOptions opts;
+  MemTable table(opts);
   string val;
   MemKey key1("key", 1, OP_PUT);
   ASSERT_EQ(table.Put(key1, "value1"), OK) << "put error";
@@ -55,7 +60,8 @@ TEST(mem_table_test, PutAndGet4) {
 
 TEST(mem_table_test, PutAndGet5) {
   using namespace adl;
-  MemTable table;
+  DBOptions opts;
+  MemTable table(opts);
   string val;
   MemKey key1("key1", 1, OP_PUT);
   ASSERT_EQ(table.Put(key1, "value1"), OK) << "put error";
@@ -77,11 +83,12 @@ TEST(mem_table_test, PutAndGet5) {
 
 TEST(mem_table_test, PutAndGetBig) {
   using namespace adl;
-  MemTable table;
+  DBOptions opts;
+  MemTable table(opts);
   for (int i = 0; i < 10000; i++) {
     string key = "key" + to_string(i);
     string val = "value" + to_string(i);
-    MemKey key1(key, 1, OP_PUT);
+    MemKey key1(key, i, OP_PUT);
     ASSERT_EQ(table.Put(key1, val), OK) << "put error";
   }
   for (int i = 0; i < 10000; i++) {
