@@ -1,6 +1,7 @@
 #include "mem_table.hpp"
 #include <string.h>
 #include "file_util.hpp"
+#include "monitor_logger.hpp"
 #include "sstable.hpp"
 
 namespace adl {
@@ -33,10 +34,12 @@ RC MemTable::Get(string_view key, string &value) {
 }
 
 RC MemTable::BuildSSTable(string_view dbname) {
+  MLogger->info("memtable -> sstable");
+
   unsigned char sha256[SHA256_DIGEST_LENGTH];
   TempFile *temp_file = nullptr;
   auto rc = FileManager::OpenTempFile(&temp_file);
-  if (rc != OK) return rc;
+  if (rc) return rc;
   auto sstable = new SSTable(dbname, temp_file, *options_);
 
   for (auto iter = table_.begin(); iter != table_.end(); iter++) {
@@ -44,16 +47,18 @@ RC MemTable::BuildSSTable(string_view dbname) {
     string &value = iter->second;
     string key = memkey.ToKey();
     rc = sstable->Add(key, value);
-    if (rc != OK) return rc;
+    if (rc) return rc;
   }
 
   rc = sstable->Final(sha256);
-  if (rc != OK) return rc;
+  if (rc) return rc;
   string sha256_hex = sha256_digit_to_hex(sha256);
   string new_sstable_name(dbname);
   new_sstable_name += "/" + sha256_hex + ".sst";
   temp_file->ReName(new_sstable_name);
   temp_file->Close();
+
+  MLogger->info("sstable {} created", new_sstable_name);
   delete sstable;
   delete temp_file;
 

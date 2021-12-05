@@ -124,7 +124,7 @@ WritAbleFile::~WritAbleFile() {
 RC WritAbleFile::Close() {
   if (pos_ > 0) {
     auto rc = Flush();
-    if (rc != OK) return rc;
+    if (rc) return rc;
   }
   if (fd_ != -1) {
     int ret = close(fd_);

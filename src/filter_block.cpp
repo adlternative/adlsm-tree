@@ -123,7 +123,7 @@ RC FilterBlockReader::Init(const string /* string_view */ &filter_blocks) {
   int info_offset = (int)(info_len_offset - info_len);
   filter_info_ = {&filter_blocks_[info_offset], (size_t)info_len};
   auto rc = CreateFilterAlgorithm();
-  if (rc != OK) return rc;
+  if (rc) return rc;
   /* 3. GET filter num */
   if (info_offset < sizeof(int)) return FILTER_BLOCK_ERROR;
   int filters_num_offset = (int)(info_offset - sizeof(int));

@@ -1,10 +1,11 @@
 1. mem_table [√]
-2. sst_table
-4. minor compaction
-4. major/full compaction
-4. metadata(MANIFEST)
-5. write ahead log
-6. cache
-7. tcmalloc/jemalloc
-8. multi-thread
-9. transaction
+2. minor compaction [√]
+3. monitor-log (spdlog) [√]
+4. sst_table
+5. major/full compaction
+6. metadata (MANIFEST)
+7. write ahead log
+8. cache
+9. tcmalloc/jemalloc
+10. multi-thread
+11. transaction

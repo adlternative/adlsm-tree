@@ -25,9 +25,10 @@ add_executable(mem_table_test
                src/murmur3_hash.cpp
                src/encode.cpp
                src/back_ground_worker.cpp
+               src/monitor_logger.cpp
                test/mem_table_test.cpp)
 
-target_link_libraries(mem_table_test crypto gtest gtest_main pthread fmt)
+target_link_libraries(mem_table_test crypto gtest gtest_main pthread fmt spdlog)
 
 # 数据库整体测试
 add_executable(db_test
@@ -42,8 +43,9 @@ add_executable(db_test
                src/db.cpp
                src/encode.cpp
                src/back_ground_worker.cpp
+               src/monitor_logger.cpp
                test/db_test.cpp)
-target_link_libraries(db_test crypto gtest gtest_main pthread fmt)
+target_link_libraries(db_test crypto gtest gtest_main pthread fmt spdlog)
 
 # 块测试
 add_executable(block_test src/block.cpp test/block_test.cpp)
@@ -65,12 +67,13 @@ add_executable(sstable_test
                src/murmur3_hash.cpp
                src/encode.cpp
                src/back_ground_worker.cpp
+               src/monitor_logger.cpp
                test/sstable_test.cpp)
-target_link_libraries(sstable_test crypto gtest gtest_main pthread)
+target_link_libraries(sstable_test crypto gtest gtest_main pthread fmt spdlog)
 
 # 文件工具测试
 add_executable(file_util_test src/file_util.cpp test/file_util_test.cpp)
-target_link_libraries(file_util_test gtest gtest_main fmt)
+target_link_libraries(file_util_test gtest gtest_main spdlog fmt)
 
 add_test(NAME mem_table_test COMMAND mem_table_test)
 add_test(NAME db_test COMMAND db_test)

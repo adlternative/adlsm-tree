@@ -29,7 +29,7 @@ RC SSTable::Add(string_view key, string_view value) {
   filter_block_.Update(key);
   /* add <K,V> to data block */
   auto rc = data_block_.Add(key, value);
-  if (rc != OK) return rc;
+  if (rc) return rc;
   last_key_ = key;
   if (data_block_.EstimatedSize() > need_flush_size_) FlushDataBlock();
   return OK;
@@ -40,7 +40,7 @@ RC SSTable::FlushDataBlock() {
   data_block_.Final(buffer_);
   SHA256_Update(&sha256_, buffer_.c_str(), buffer_.size());
   auto rc = file_->Append(buffer_);
-  if (rc != OK) return rc;
+  if (rc) return rc;
   data_block_handle_.SetMeta(offset_, (int)buffer_.size());
   offset_ += (int)buffer_.size();
   data_block_.Reset();

@@ -6,6 +6,7 @@
 #include <string>
 #include "back_ground_worker.hpp"
 #include "mem_table.hpp"
+#include "monitor_logger.hpp"
 #include "options.hpp"
 #include "rc.hpp"
 
@@ -35,7 +36,7 @@ class DB {
   RC DoMinorCompaction();
 
   RC BuildSSTable();
-  RC FreezeMemTable();
+  void FreezeMemTable();
   bool NeedCompactions();
   bool NeedFreezeMemTable();
 
@@ -58,6 +59,9 @@ class DB {
 
   /* back ground */
   vector<Worker *> workers_;
+
+  /* monitor_logger.hpp */
+  // MonitorLogger monitor_logger_;
 
   bool is_compacting_;
 };
