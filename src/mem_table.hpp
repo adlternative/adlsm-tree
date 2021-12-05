@@ -48,22 +48,36 @@ struct MemKey {
     MemKey m(string(uk), INT64_MAX, OP_PUT);
     return m;
   }
+
+  size_t Size() const { return user_key_.size() + 8 + 1; }
 };
 
 struct DBOptions;
 class MemTable {
  public:
+  struct Stat {
+    Stat() : keys_size_(0), values_size_(0) {}
+    void Update(size_t key_size, size_t value_size) {
+      keys_size_ += key_size;
+      values_size_ += value_size;
+    }
+    size_t Sum() { return keys_size_ + values_size_; }
+    size_t keys_size_;
+    size_t values_size_;
+  };
+
   MemTable(const DBOptions &options);
   RC Put(const MemKey &key, const string &value);
   RC Get(const string &key, string &value);
   RC BuildSSTable(const string &dbname);
+  size_t GetMemTableSize();
 
  private:
-  size_t keys_size_;
-  size_t vals_size_;
-  /* mutable std::mutex mu_;  */
+  /* mutable mutex mu_;  */
   const DBOptions *options_;
   map<MemKey, string> table_;
+
+  Stat stat_; /* 整个内存表的状态 */
 };
 
 }  // namespace adl

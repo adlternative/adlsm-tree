@@ -7,7 +7,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <filesystem>
-#include "rc.hpp"
 
 namespace adl {
 
@@ -216,7 +215,7 @@ RC TempFile::ReName(const std::string &new_file) {
 }
 
 RC TempFile::Open(TempFile **result) {
-  static char tmpfile[] = "/tmp/adl_XXXXXX";
+  char tmpfile[] = "/tmp/adl_XXXXXX";
   int fd = mkstemp(tmpfile);
   if (fd == -1) {
     *result = nullptr;

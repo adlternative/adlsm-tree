@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS_DEBUG "-std=c++2a -g -fno-omit-frame-pointer -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++2a -O2")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #include_directories(${PROJECT_SOURCE_DIR}/src)
 
@@ -23,9 +24,10 @@ add_executable(mem_table_test
                src/footer_block.cpp
                src/murmur3_hash.cpp
                src/encode.cpp
+               src/back_ground_worker.cpp
                test/mem_table_test.cpp)
 
-target_link_libraries(mem_table_test gtest gtest_main)
+target_link_libraries(mem_table_test crypto gtest gtest_main pthread fmt)
 
 # 数据库整体测试
 add_executable(db_test
@@ -39,17 +41,19 @@ add_executable(db_test
                src/murmur3_hash.cpp
                src/db.cpp
                src/encode.cpp
+               src/back_ground_worker.cpp
                test/db_test.cpp)
-target_link_libraries(db_test gtest gtest_main)
+target_link_libraries(db_test crypto gtest gtest_main pthread fmt)
 
 # 块测试
 add_executable(block_test src/block.cpp test/block_test.cpp)
-target_link_libraries(block_test gtest gtest_main)
+target_link_libraries(block_test crypto gtest gtest_main)
 
 # 过滤器块测试
-add_executable(filter_block_test src/encode.cpp src/filter_block.cpp  src/murmur3_hash.cpp test/filter_block_test.cpp)
-target_link_libraries(filter_block_test gtest gtest_main)
+add_executable(filter_block_test src/encode.cpp src/filter_block.cpp src/murmur3_hash.cpp test/filter_block_test.cpp)
+target_link_libraries(filter_block_test crypto gtest gtest_main)
 
+# sstable 测试
 add_executable(sstable_test
                src/block.cpp
                src/mem_table.cpp
@@ -60,12 +64,17 @@ add_executable(sstable_test
                src/footer_block.cpp
                src/murmur3_hash.cpp
                src/encode.cpp
+               src/back_ground_worker.cpp
                test/sstable_test.cpp)
+target_link_libraries(sstable_test crypto gtest gtest_main pthread)
 
-target_link_libraries(sstable_test gtest gtest_main)
+# 文件工具测试
+add_executable(file_util_test src/file_util.cpp test/file_util_test.cpp)
+target_link_libraries(file_util_test gtest gtest_main fmt)
 
 add_test(NAME mem_table_test COMMAND mem_table_test)
 add_test(NAME db_test COMMAND db_test)
 add_test(NAME block_test COMMAND block_test)
 add_test(NAME filter_block_test COMMAND filter_block_test)
 add_test(NAME sstable_test COMMAND sstable_test)
+add_test(NAME file_util_test COMMAND file_util_test)

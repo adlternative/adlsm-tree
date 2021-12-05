@@ -1,6 +1,7 @@
 #ifndef ADL_LSM_TREE_SSTABLE_H__
 #define ADL_LSM_TREE_SSTABLE_H__
 
+#include <openssl/sha.h>
 #include <string>
 #include "block.hpp"
 #include "filter_block.hpp"
@@ -20,7 +21,7 @@ class SSTable {
   SSTable(const string &dbname, WritAbleFile *file, const DBOptions &options);
   /* Build */
   RC Add(const string &key, const string &value);
-  RC Final();
+  RC Final(unsigned char sha256_digit[]);
 
  private:
   RC FlushDataBlock();
@@ -49,10 +50,14 @@ class SSTable {
   FooterBlock foot_block_;
   // BlockHandle foot_block_handle_;
 
+  SHA256_CTX sha256_;
   string buffer_;   /* 数据 */
   int offset_;      /* 数据的偏移量 */
   string last_key_; /* 最后一次 add 的 key */
 };
+
+string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]);
+
 }  // namespace adl
 
 #endif  // ADL_LSM_TREE_SSTABLE_H__

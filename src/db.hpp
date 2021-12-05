@@ -2,7 +2,9 @@
 #define ADL_LSM_TREE_DB_H__
 
 #include <atomic>
+#include <condition_variable>
 #include <string>
+#include "back_ground_worker.hpp"
 #include "mem_table.hpp"
 #include "options.hpp"
 #include "rc.hpp"
@@ -11,13 +13,12 @@ namespace adl {
 
 class DB {
  public:
-  DB(const string &dp_path, const DBOptions &options);
+  DB(const string &dp_path, DBOptions &options);
   ~DB();
   DB(const DB &) = delete;
   DB &operator=(const DB &) = delete;
 
-  static RC Open(const std::string &dbname, const DBOptions &options,
-                 DB **dbptr);
+  static RC Open(const std::string &dbname, DBOptions &options, DB **dbptr);
   static RC Create(const std::string &dbname);
   static RC Destroy(const std::string &dbname);
   RC Close();
@@ -29,8 +30,14 @@ class DB {
 
  private:
   RC Write(const std::string &key, const std::string &value, OpType op);
+  RC CheckMemAndCompaction();
+  RC DoCompaction();
+  RC DoMinorCompaction();
 
   RC BuildSSTable();
+  RC FreezeMemTable();
+  bool NeedCompactions();
+  bool NeedFreezeMemTable();
 
   /* memory */
   MemTable *mem_;
@@ -42,8 +49,17 @@ class DB {
 
   /* disk */
   string dbname_;
-  DBOptions options;
+  DBOptions *options_;
   /* metadata */
+
+  /* thread sync */
+  mutex mutex_;
+  std::condition_variable background_work_done_cond_;
+
+  /* back ground */
+  vector<Worker *> workers_;
+
+  bool is_compacting_;
 };
 
 }  // namespace adl

@@ -13,6 +13,27 @@ TEST(db, test_db_create) {
   delete db;
 }
 
+TEST(db, test_db_write) {
+  using namespace adl;
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "/tmp/adl-testdb1";
+  opts.create_if_not_exists = true;
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  for (int i = 0; i < 300000; i++) {
+    string key = "key" + to_string(i);
+    string val = "value" + to_string(i);
+    ASSERT_EQ(db->Put(key, val), OK) << "put error";
+  }
+  for (int i = 0; i < 300000; i++) {
+    string key = "key" + to_string(i);
+    ASSERT_EQ(db->Delete(key), OK) << "delete error";
+  }
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+}
+
+#ifdef TEST_1
 TEST(db, test_db_put_get) {
   using namespace adl;
   DB *db = nullptr;
@@ -47,3 +68,4 @@ TEST(db, test_db_put_get) {
   ASSERT_EQ(db->Close(), OK);
   delete db;
 }
+#endif

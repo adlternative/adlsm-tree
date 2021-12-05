@@ -11,6 +11,7 @@ RC MemTable::Put(const MemKey &key, const string &value) {
   else if (key.op_type_ == OP_DELETE)
     table_[key] = "";
 
+  stat_.Update(key.Size(), value.size());
   return OK;
 }
 
@@ -32,10 +33,10 @@ RC MemTable::Get(const string &key, string &value) {
 }
 
 RC MemTable::BuildSSTable(const string &dbname) {
+  unsigned char sha256[SHA256_DIGEST_LENGTH];
   TempFile *temp_file = nullptr;
   auto rc = FileManager::OpenTempFile(&temp_file);
   if (rc != OK) return rc;
-
   auto sstable = new SSTable(dbname, temp_file, *options_);
 
   for (auto iter = table_.begin(); iter != table_.end(); iter++) {
@@ -45,9 +46,11 @@ RC MemTable::BuildSSTable(const string &dbname) {
     rc = sstable->Add(key, value);
     if (rc != OK) return rc;
   }
-  sstable->Final();
 
-  auto new_sstable_name = dbname + "/" + "temp.sst";
+  rc = sstable->Final(sha256);
+  if (rc != OK) return rc;
+  string sha256_hex = sha256_digit_to_hex(sha256);
+  auto new_sstable_name = dbname + "/" + sha256_hex + ".sst";
   temp_file->ReName(new_sstable_name);
   temp_file->Close();
   delete sstable;
@@ -57,5 +60,7 @@ RC MemTable::BuildSSTable(const string &dbname) {
 }
 
 MemTable::MemTable(const DBOptions &options) : options_(&options) {}
+
+size_t MemTable::GetMemTableSize() { return stat_.Sum(); }
 
 }  // namespace adl

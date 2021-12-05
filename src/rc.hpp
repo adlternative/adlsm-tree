@@ -19,7 +19,8 @@ enum RC {
   CLOSE_FILE_ERROR,
   RENAME_FILE_ERROR,
   MAKESTEMP_ERROR,
-  FILTER_BLOCK_ERROR
+  FILTER_BLOCK_ERROR,
+  DB_CLOSED,
 };
 
 inline std::string strrc(RC rc) {
