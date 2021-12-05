@@ -5,7 +5,7 @@
 
 namespace adl {
 
-RC MemTable::Put(const MemKey &key, const string &value) {
+RC MemTable::Put(const MemKey &key, string_view value) {
   if (key.op_type_ == OP_PUT)
     table_[key] = value;
   else if (key.op_type_ == OP_DELETE)
@@ -15,7 +15,7 @@ RC MemTable::Put(const MemKey &key, const string &value) {
   return OK;
 }
 
-RC MemTable::Get(const string &key, string &value) {
+RC MemTable::Get(string_view key, string &value) {
   auto min_key = MemKey::NewMinKey(key);
 
   auto iter = table_.lower_bound(min_key);
@@ -32,7 +32,7 @@ RC MemTable::Get(const string &key, string &value) {
   }
 }
 
-RC MemTable::BuildSSTable(const string &dbname) {
+RC MemTable::BuildSSTable(string_view dbname) {
   unsigned char sha256[SHA256_DIGEST_LENGTH];
   TempFile *temp_file = nullptr;
   auto rc = FileManager::OpenTempFile(&temp_file);
@@ -50,7 +50,8 @@ RC MemTable::BuildSSTable(const string &dbname) {
   rc = sstable->Final(sha256);
   if (rc != OK) return rc;
   string sha256_hex = sha256_digit_to_hex(sha256);
-  auto new_sstable_name = dbname + "/" + sha256_hex + ".sst";
+  string new_sstable_name(dbname);
+  new_sstable_name += "/" + sha256_hex + ".sst";
   temp_file->ReName(new_sstable_name);
   temp_file->Close();
   delete sstable;

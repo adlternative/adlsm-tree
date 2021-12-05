@@ -3,7 +3,7 @@
 namespace adl {
 Block::Block() : entries_len_(0) {}
 
-RC Block::Add(const string &key, const string &value) {
+RC Block::Add(string_view  key, string_view  value) {
   int value_len = (int)value.length();
   int key_len = (int)key.length();
   int shared_key_len = 0;

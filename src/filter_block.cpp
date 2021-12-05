@@ -45,7 +45,7 @@ BloomFilter::BloomFilter(int bits_per_key) : bits_per_key_(bits_per_key) {
   if (k_ > 30) k_ = 30;
 }
 
-bool BloomFilter::IsKeyExists(const string &key, string_view bitmap) {
+bool BloomFilter::IsKeyExists(string_view key, string_view bitmap) {
   int bitmap_bits_len = (int)bitmap.size() * 8;
 
   auto h1 = murmur3_hash(0xe2c6928a, key.data(), key.size());
@@ -68,8 +68,8 @@ void BloomFilter::FilterInfo(string &info) {
 FilterBlock::FilterBlock(unique_ptr<FilterAlgorithm> &&method)
     : method_(std::move(method)) {}
 
-RC FilterBlock::Update(const string &key) {
-  keys_.push_back(key);
+RC FilterBlock::Update(string_view key) {
+  keys_.emplace_back(key);
   return OK;
 }
 
@@ -160,7 +160,7 @@ RC FilterBlockReader::CreateFilterAlgorithm() {
   return OK;
 }
 
-bool FilterBlockReader::IsKeyExists(int filter_block_num, const string &key) {
+bool FilterBlockReader::IsKeyExists(int filter_block_num, string_view key) {
   int filter_offset1, filter_offset2;
   if (filter_block_num >= filters_nums_) return false;
   Decode32(&filters_offsets_[filter_block_num * sizeof(int)], &filter_offset1);

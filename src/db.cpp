@@ -1,11 +1,10 @@
 #include "db.hpp"
-//#include <fmt/format.h>
 #include <mutex>
 #include "file_util.hpp"
 
 namespace adl {
 
-DB::DB(const string &dbname, DBOptions &options)
+DB::DB(string_view dbname, DBOptions &options)
     : dbname_(dbname),
       sequence_id_(0),
       options_(&options),
@@ -27,7 +26,7 @@ DB::~DB() {
   if (imem_) delete imem_;
 }
 
-RC DB::Open(const std::string &dbname, DBOptions &options, DB **dbptr) {
+RC DB::Open(string_view dbname, DBOptions &options, DB **dbptr) {
   if (!FileManager::Exists(dbname)) {
     if (options.create_if_not_exists) {
       auto rc = Create(dbname);
@@ -51,11 +50,9 @@ RC DB::Open(const std::string &dbname, DBOptions &options, DB **dbptr) {
   return OK;
 }
 
-RC DB::Create(const std::string &dbname) {
-  return FileManager::Create(dbname, DIR_);
-}
+RC DB::Create(string_view dbname) { return FileManager::Create(dbname, DIR_); }
 
-RC DB::Destroy(const std::string &dbname) {
+RC DB::Destroy(string_view dbname) {
   // stop all services
   return FileManager::Destroy(dbname);
 }
@@ -66,17 +63,17 @@ RC DB::Close() {
   return OK;
 }
 
-RC DB::Put(const std::string &key, const std::string &value) {
+RC DB::Put(string_view key, string_view value) {
   return Write(key, value, OP_PUT);
 }
 
-RC DB::Delete(const std::string &key) { return Write(key, "", OP_DELETE); }
+RC DB::Delete(string_view key) { return Write(key, "", OP_DELETE); }
 
-RC DB::Get(const std::string &key, std::string &value) {
+RC DB::Get(string_view key, std::string &value) {
   return mem_->Get(key, value);
 }
 
-RC DB::Write(const std::string &key, const std::string &value, OpType op) {
+RC DB::Write(string_view key, string_view value, OpType op) {
   lock_guard<mutex> lock(mutex_);
 
   auto rc = CheckMemAndCompaction();

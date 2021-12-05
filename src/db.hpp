@@ -13,23 +13,23 @@ namespace adl {
 
 class DB {
  public:
-  DB(const string &dp_path, DBOptions &options);
+  DB(string_view db_path, DBOptions &options);
   ~DB();
   DB(const DB &) = delete;
   DB &operator=(const DB &) = delete;
 
-  static RC Open(const std::string &dbname, DBOptions &options, DB **dbptr);
-  static RC Create(const std::string &dbname);
-  static RC Destroy(const std::string &dbname);
+  static RC Open(string_view dbname, DBOptions &options, DB **dbptr);
+  static RC Create(string_view dbname);
+  static RC Destroy(string_view dbname);
   RC Close();
 
-  RC Put(const std::string &key, const std::string &value);
-  RC Delete(const std::string &key);
+  RC Put(string_view key, string_view value);
+  RC Delete(string_view key);
 
-  RC Get(const std::string &key, std::string &value);
+  RC Get(string_view key, std::string &value);
 
  private:
-  RC Write(const std::string &key, const std::string &value, OpType op);
+  RC Write(string_view key, string_view value, OpType op);
   RC CheckMemAndCompaction();
   RC DoCompaction();
   RC DoMinorCompaction();

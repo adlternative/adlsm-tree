@@ -15,7 +15,7 @@ string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]) {
   return ss.str();
 }
 
-SSTable::SSTable(const string &dbname, WritAbleFile *file,
+SSTable::SSTable(string_view dbname, WritAbleFile *file,
                  const DBOptions &options)
     : dbname_(dbname),
       file_(file),
@@ -24,7 +24,7 @@ SSTable::SSTable(const string &dbname, WritAbleFile *file,
   SHA256_Init(&sha256_);
 }
 
-RC SSTable::Add(const string &key, const string &value) {
+RC SSTable::Add(string_view key, string_view value) {
   /* add K to filter block */
   filter_block_.Update(key);
   /* add <K,V> to data block */

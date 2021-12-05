@@ -18,9 +18,9 @@ struct DBOptions;
 /* Sorted Strings Table */
 class SSTable {
  public:
-  SSTable(const string &dbname, WritAbleFile *file, const DBOptions &options);
+  SSTable(string_view dbname, WritAbleFile *file, const DBOptions &options);
   /* Build */
-  RC Add(const string &key, const string &value);
+  RC Add(string_view key, string_view value);
   RC Final(unsigned char sha256_digit[]);
 
  private:

@@ -12,7 +12,7 @@ class Block {
  public:
   static constexpr unsigned int restarts_block_len_ = 12;
   Block();
-  RC Add(const string &key, const string &value);
+  RC Add(string_view key, string_view value);
   RC Final(string &result);
   size_t EstimatedSize();
   void Reset();

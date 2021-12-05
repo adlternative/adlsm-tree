@@ -9,7 +9,7 @@ using namespace std;
 
 class FooterBlock {
  public:
-  RC Add(const string &meta_block_handle, const string &index_block_handle);
+  RC Add(string_view meta_block_handle, string_view index_block_handle);
 
   RC Final(string &result);
 

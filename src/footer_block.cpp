@@ -1,8 +1,8 @@
 #include "footer_block.hpp"
 
 namespace adl {
-RC FooterBlock::Add(const string &meta_block_handle,
-                    const string &index_block_handle) {
+RC FooterBlock::Add(string_view meta_block_handle,
+                    string_view index_block_handle) {
   meta_block_handle_ = meta_block_handle;
   index_block_handle_ = index_block_handle;
   return OK;

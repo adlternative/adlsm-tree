@@ -10,19 +10,19 @@
 
 namespace adl {
 
-bool FileManager::Exists(const std::string &path) {
+bool FileManager::Exists(string_view path) {
   struct stat sb;
-  return stat(path.c_str(), &sb) == 0;
+  return stat(path.data(), &sb) == 0;
 }
 
-bool FileManager::IsDirectory(const std::string &path) {
+bool FileManager::IsDirectory(string_view path) {
   struct stat sb;
-  return stat(path.c_str(), &sb) == 0 && S_ISDIR(sb.st_mode);
+  return stat(path.data(), &sb) == 0 && S_ISDIR(sb.st_mode);
 }
 
-RC FileManager::Create(const std::string &path, FileOptions options) {
+RC FileManager::Create(std::string_view path, FileOptions options) {
   if (options == DIR_) {
-    int err = mkdir(path.c_str(), 0755);
+    int err = mkdir(path.data(), 0755);
     if (err) {
       return CREATE_DIRECTORY_FAILED;
     }
@@ -78,14 +78,14 @@ int remove_directory(const char *path) {
   return r;
 }
 
-RC FileManager::Destroy(const std::string &path) {
+RC FileManager::Destroy(string_view path) {
   if (IsDirectory(path)) {
-    int err = remove_directory(path.c_str());
+    int err = remove_directory(path.data());
     if (err) {
       return DESTROY_DIRECTORY_FAILED;
     }
   } else {
-    int err = unlink(path.c_str());
+    int err = unlink(path.data());
     if (err) {
       return DESTROY_FILE_FAILED;
     }
@@ -93,7 +93,7 @@ RC FileManager::Destroy(const std::string &path) {
   return OK;
 }
 
-RC FileManager::OpenWritAbleFile(const std::string &filename,
+RC FileManager::OpenWritAbleFile(string_view filename,
                                  WritAbleFile **result) {
   return WritAbleFile::Open(filename, result);
 }
@@ -102,12 +102,12 @@ RC FileManager::OpenTempFile(TempFile **result) {
   return TempFile::Open(result);
 }
 
-WritAbleFile::WritAbleFile(const std::string &filename, int fd)
+WritAbleFile::WritAbleFile(string_view filename, int fd)
     : filename_(filename), fd_(fd), pos_(0), closed_(false) {}
 
-RC WritAbleFile::Open(const std::string &filename, WritAbleFile **result) {
+RC WritAbleFile::Open(string_view filename, WritAbleFile **result) {
   int fd =
-      ::open(filename.c_str(), O_TRUNC | O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
+      ::open(filename.data(), O_TRUNC | O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
   if (fd < 0) {
     *result = nullptr;
     return OPEN_FILE_ERROR;
@@ -208,14 +208,14 @@ RC WritAbleFile::Append(const std::string &data) {
 TempFile::TempFile(const std::string &filename, int fd)
     : WritAbleFile(filename, fd) {}
 
-RC TempFile::ReName(const std::string &new_file) {
-  int ret = rename(filename_.c_str(), new_file.c_str());
+RC TempFile::ReName(string_view new_file) {
+  int ret = rename(filename_.c_str(), new_file.data());
   if (ret == -1) return RENAME_FILE_ERROR;
   return OK;
 }
 
 RC TempFile::Open(TempFile **result) {
-  char tmpfile[] = "/tmp/adl_XXXXXX";
+  char tmpfile[] = "/tmp/adlsm_tree_XXXXXX";
   int fd = mkstemp(tmpfile);
   if (fd == -1) {
     *result = nullptr;

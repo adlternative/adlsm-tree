@@ -2,9 +2,12 @@
 #define ADL_LSM_TREE_FILE_UTIL_H__
 
 #include <string>
+#include <string_view>
 #include "rc.hpp"
 
 namespace adl {
+
+using namespace std;
 
 enum FileOptions {
   DIR_,
@@ -16,19 +19,19 @@ class TempFile;
 
 class FileManager {
  public:
-  static bool Exists(const std::string &path);
-  static bool IsDirectory(const std::string &path);
-  static RC Create(const std::string &path, FileOptions options);
-  static RC Destroy(const std::string &path);
+  static bool Exists(string_view path);
+  static bool IsDirectory(string_view path);
+  static RC Create(string_view path, FileOptions options);
+  static RC Destroy(string_view path);
   /* open */
-  static RC OpenWritAbleFile(const std::string &filename,
+  static RC OpenWritAbleFile(string_view filename,
                              WritAbleFile **result);
   static RC OpenTempFile(TempFile **result);
 };
 
 class WritAbleFile {
  public:
-  WritAbleFile(const std::string &filename, int fd);
+  WritAbleFile(string_view filename, int fd);
   WritAbleFile(const WritAbleFile &) = delete;
   WritAbleFile &operator=(const WritAbleFile &) = delete;
   virtual ~WritAbleFile();
@@ -37,7 +40,7 @@ class WritAbleFile {
   /* virtual */ RC Flush();
   /* virtual */ RC Sync();
 
-  static RC Open(const std::string &filename, WritAbleFile **result);
+  static RC Open(string_view filename, WritAbleFile **result);
 
  public:
   static constexpr size_t kWritAbleFileBufferSize = 65536;
@@ -55,7 +58,7 @@ class WritAbleFile {
 class TempFile : public WritAbleFile {
  public:
   TempFile(const std::string &filename, int fd);
-  RC ReName(const std::string &filename);
+  RC ReName(string_view filename);
   static RC Open(TempFile **result);
 };
 

@@ -13,7 +13,7 @@ using namespace std;
 class FilterAlgorithm {
  public:
   virtual RC Keys2Block(const vector<string> &keys, string &result) = 0;
-  virtual bool IsKeyExists(const string &key, string_view bitmap) = 0;
+  virtual bool IsKeyExists(string_view key, string_view bitmap) = 0;
   virtual void FilterInfo(string &info) { /* NOTHING */
   }
   virtual ~FilterAlgorithm() = default;
@@ -24,7 +24,7 @@ class BloomFilter : public FilterAlgorithm {
   /* bits_per_key 将会决定 一个 bloom-filter-block n 个 key 需要存储的总大小 */
   explicit BloomFilter(int bits_per_key);
   RC Keys2Block(const vector<string> &keys, string &result) override;
-  bool IsKeyExists(const string &key, string_view bitmap) override;
+  bool IsKeyExists(string_view key, string_view bitmap) override;
   void FilterInfo(string &info) override;
   ~BloomFilter() = default;
 
@@ -37,7 +37,7 @@ class FilterBlock {
  public:
   explicit FilterBlock(unique_ptr<FilterAlgorithm> &&method);
   /* 将 key 添加到过滤器中等待计算 */
-  RC Update(const string &key);
+  RC Update(string_view key);
   /* 将布隆过滤器生成的结果加入从 ret 返回 */
   RC Final(string &result);
   /* 将积攒的 keys 生成 filter_block 追加到 buffer_ 中 */
@@ -59,7 +59,7 @@ class FilterBlockReader {
    * @brief 我们从外界传入 key 所在 FILTER BLOCK NUM，因为它和
    * DATA BLOCK NUM 是相同的。
    */
-  bool IsKeyExists(int filter_block_num, const string &key);
+  bool IsKeyExists(int filter_block_num, string_view key);
 
  private:
   RC CreateFilterAlgorithm();
