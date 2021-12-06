@@ -8,10 +8,10 @@
 namespace adl {
 using namespace std;
 
-class Block {
+class BlockWriter {
  public:
   static constexpr unsigned int restarts_block_len_ = 12;
-  Block();
+  BlockWriter();
   RC Add(string_view key, string_view value);
   RC Final(string &result);
   size_t EstimatedSize();

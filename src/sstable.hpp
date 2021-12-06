@@ -16,9 +16,10 @@ class WritAbleFile;
 struct DBOptions;
 
 /* Sorted Strings Table */
-class SSTable {
+class SSTableWriter {
  public:
-  SSTable(string_view dbname, WritAbleFile *file, const DBOptions &options);
+  SSTableWriter(string_view dbname, WritAbleFile *file,
+                const DBOptions &options);
   /* Build */
   RC Add(string_view key, string_view value);
   RC Final(unsigned char sha256_digit[]);
@@ -31,19 +32,19 @@ class SSTable {
   WritAbleFile *file_;
 
   /* 数据块 */
-  Block data_block_;
+  BlockWriter data_block_;
   BlockHandle data_block_handle_;
 
   /* 索引块 */
-  Block index_block_;
+  BlockWriter index_block_;
   BlockHandle index_block_handle_;
 
   /* 过滤器块 */
-  FilterBlock filter_block_;
+  FilterBlockWriter filter_block_;
   BlockHandle filter_block_handle_;
 
   /* 元数据块 */
-  Block meta_data_block_;
+  BlockWriter meta_data_block_;
   BlockHandle meta_data_block_handle_;
 
   /* 尾信息块 */

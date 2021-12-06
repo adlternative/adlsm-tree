@@ -40,7 +40,7 @@ RC MemTable::BuildSSTable(string_view dbname) {
   TempFile *temp_file = nullptr;
   auto rc = FileManager::OpenTempFile(dbname, "tmp_sst_", &temp_file);
   if (rc) return rc;
-  auto sstable = new SSTable(dbname, temp_file, *options_);
+  auto sstable = new SSTableWriter(dbname, temp_file, *options_);
 
   for (auto iter = table_.begin(); iter != table_.end(); iter++) {
     MemKey memkey = iter->first;
@@ -54,7 +54,7 @@ RC MemTable::BuildSSTable(string_view dbname) {
   if (rc) return rc;
   string sha256_hex = sha256_digit_to_hex(sha256);
   string new_sstable_name(dbname);
-  new_sstable_name += "/" + sha256_hex + ".sst";
+  new_sstable_name += sha256_hex + ".sst";
   temp_file->ReName(new_sstable_name);
   temp_file->Close();
 

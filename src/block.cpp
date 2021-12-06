@@ -1,9 +1,9 @@
 #include "block.hpp"
 
 namespace adl {
-Block::Block() : entries_len_(0) {}
+BlockWriter::BlockWriter() : entries_len_(0) {}
 
-RC Block::Add(string_view  key, string_view  value) {
+RC BlockWriter::Add(string_view key, string_view value) {
   int value_len = (int)value.length();
   int key_len = (int)key.length();
   int shared_key_len = 0;
@@ -33,7 +33,7 @@ RC Block::Add(string_view  key, string_view  value) {
   return OK;
 }
 
-RC Block::Final(string &result) {
+RC BlockWriter::Final(string &result) {
   /* 添加重启点偏移量及其长度 */
   int restarts_len = (int)restarts_.size();
   for (int i = 0; i < restarts_len; i++) {
@@ -44,11 +44,11 @@ RC Block::Final(string &result) {
   return OK;
 }
 
-size_t Block::EstimatedSize() {
+size_t BlockWriter::EstimatedSize() {
   return buffer_.size() + (restarts_.size() + 1) * sizeof(int);
 }
 
-void Block::Reset() {
+void BlockWriter::Reset() {
   entries_len_ = 0;
   buffer_.clear();
   restarts_.clear();
@@ -56,6 +56,6 @@ void Block::Reset() {
   return;
 }
 
-bool Block::Empty() { return !entries_len_; }
+bool BlockWriter::Empty() { return !entries_len_; }
 
 }  // namespace adl

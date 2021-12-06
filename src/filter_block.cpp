@@ -65,15 +65,15 @@ void BloomFilter::FilterInfo(string &info) {
   info.append((char *)&bits_per_key_, sizeof(int));
 }
 
-FilterBlock::FilterBlock(unique_ptr<FilterAlgorithm> &&method)
+FilterBlockWriter::FilterBlockWriter(unique_ptr<FilterAlgorithm> &&method)
     : method_(std::move(method)) {}
 
-RC FilterBlock::Update(string_view key) {
+RC FilterBlockWriter::Update(string_view key) {
   keys_.emplace_back(key);
   return OK;
 }
 
-RC FilterBlock::Final(string &result) {
+RC FilterBlockWriter::Final(string &result) {
   if (!keys_.empty()) Keys2Block();
 
   int offset_begin_offset = (int)buffer_.size();
@@ -100,7 +100,7 @@ RC FilterBlock::Final(string &result) {
   return OK;
 }
 
-RC FilterBlock::Keys2Block() {
+RC FilterBlockWriter::Keys2Block() {
   offsets_.push_back((int)buffer_.size());
   method_->Keys2Block(keys_, buffer_);
   keys_.clear();

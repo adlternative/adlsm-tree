@@ -4,7 +4,7 @@
 TEST(filter_block, bloom_filter) {
   using namespace adl;
   string result;
-  FilterBlock filter(make_unique<BloomFilter>(10));
+  FilterBlockWriter filter(make_unique<BloomFilter>(10));
 
   /* block0 */
   filter.Update("hello");

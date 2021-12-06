@@ -23,7 +23,7 @@ void AppendRS2Expect(std::string &expect, std::vector<int> &&restarts) {
 
 TEST(block_test, Add) {
   using namespace adl;
-  Block block;
+  BlockWriter block;
   block.Add("key0", "value");
   block.Add("key1", "value");
   string result;
@@ -38,7 +38,7 @@ TEST(block_test, Add) {
 
 TEST(block_test, Add2) {
   using namespace adl;
-  Block block;
+  BlockWriter block;
   block.Add("key0", "value0");
   block.Add("key1", "value1");
   block.Add("key12", "value12");
@@ -55,7 +55,7 @@ TEST(block_test, Add2) {
 
 TEST(block_test, Add3) {
   using namespace adl;
-  Block block;
+  BlockWriter block;
   string k;
   string v;
   for (int i = 0; i < 16; i++) {
@@ -93,7 +93,7 @@ TEST(block_test, Add3) {
 
 TEST(block_test, Add4) {
   using namespace adl;
-  Block block;
+  BlockWriter block;
   block.Add("key0", "value");
   block.Add("key1", "value");
   string result;

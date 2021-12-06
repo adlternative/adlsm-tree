@@ -33,9 +33,9 @@ class BloomFilter : public FilterAlgorithm {
   int k_;            /* 哈希函数个数 */
 };
 
-class FilterBlock {
+class FilterBlockWriter {
  public:
-  explicit FilterBlock(unique_ptr<FilterAlgorithm> &&method);
+  explicit FilterBlockWriter(unique_ptr<FilterAlgorithm> &&method);
   /* 将 key 添加到过滤器中等待计算 */
   RC Update(string_view key);
   /* 将布隆过滤器生成的结果加入从 ret 返回 */

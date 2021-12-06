@@ -15,8 +15,8 @@ string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]) {
   return ss.str();
 }
 
-SSTable::SSTable(string_view dbname, WritAbleFile *file,
-                 const DBOptions &options)
+SSTableWriter::SSTableWriter(string_view dbname, WritAbleFile *file,
+                             const DBOptions &options)
     : dbname_(dbname),
       file_(file),
       offset_(0),
@@ -24,7 +24,7 @@ SSTable::SSTable(string_view dbname, WritAbleFile *file,
   SHA256_Init(&sha256_);
 }
 
-RC SSTable::Add(string_view key, string_view value) {
+RC SSTableWriter::Add(string_view key, string_view value) {
   /* add K to filter block */
   filter_block_.Update(key);
   /* add <K,V> to data block */
@@ -35,7 +35,7 @@ RC SSTable::Add(string_view key, string_view value) {
   return OK;
 }
 
-RC SSTable::FlushDataBlock() {
+RC SSTableWriter::FlushDataBlock() {
   /* write <K,V>(s) from data block to file */
   data_block_.Final(buffer_);
   SHA256_Update(&sha256_, buffer_.c_str(), buffer_.size());
@@ -52,7 +52,7 @@ RC SSTable::FlushDataBlock() {
   return OK;
 }
 
-RC SSTable::Final(unsigned char sha256_digit[]) {
+RC SSTableWriter::Final(unsigned char sha256_digit[]) {
   /* 将剩余的数据块刷盘 */
   if (!data_block_.Empty()) FlushDataBlock();
   /* Filter 块 */
