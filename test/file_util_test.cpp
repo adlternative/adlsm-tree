@@ -1,8 +1,9 @@
 #include "../src/file_util.hpp"
 #include <gtest/gtest.h>
 
-TEST(tempfile, test1) {
-  using namespace adl;
+using namespace adl;
+
+TEST(tempfile, temp_file) {
   TempFile *file = nullptr;
   auto rc = TempFile::Open("/home/adl", "tmp_sst_", &file);
   ASSERT_EQ(rc, OK) << rc << std::endl;
@@ -12,5 +13,17 @@ TEST(tempfile, test1) {
   EXPECT_EQ(rc, OK) << rc << std::endl;
 
   EXPECT_TRUE(FileManager::Exists(s)) << s << " is not exist?" << std::endl;
+  delete file;
+}
+
+TEST(tempfile, mmap) {
+  MmapReadAbleFile *file = nullptr;
+  auto rc = FileManager::OpenMmapReadAbleFile("/etc/passwd", &file);
+  EXPECT_EQ(rc, OK) << strrc(rc) << std::endl;
+  auto file_size = file->Size();
+  string_view buffer;
+  rc = file->Read(0, 4, buffer);
+  EXPECT_EQ(rc, OK) << strrc(rc) << std::endl;
+  EXPECT_EQ("root", buffer);
   delete file;
 }

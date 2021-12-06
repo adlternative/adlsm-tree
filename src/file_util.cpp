@@ -5,11 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/dir.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <filesystem>
 #include "monitor_logger.hpp"
+#include "rc.hpp"
 
 namespace adl {
 
@@ -224,6 +226,7 @@ RC WritAbleFile::Append(const std::string &data) {
     memcpy(buf_, data.data() + written, left_data_len);
     pos_ += left_data_len;
   }
+
   return OK;
 }
 
@@ -252,12 +255,78 @@ RC TempFile::Open(string_view dir_path, string_view subfix, TempFile **result) {
     MLogger->error("mkstemp {} failed: {}", tmp_file, strerror(errno));
     return MAKESTEMP_ERROR;
   }
+
   std::string file_path =
       std::filesystem::read_symlink(std::filesystem::path("/proc/self/fd/") /
                                     std::to_string(fd))
           .string();
   MLogger->info("create new tempfile: {}", file_path);
   *result = new TempFile(file_path, fd);
+  return OK;
+}
+
+RC FileManager::OpenMmapReadAbleFile(string_view file_name,
+                                     MmapReadAbleFile **result) {
+  RC rc;
+  int fd = ::open(file_name.data(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    *result = nullptr;
+    return OPEN_FILE_ERROR;
+  }
+  size_t file_size = 0;
+  if (rc = GetFileSize(file_name, &file_size); rc) {
+    MLogger->error("Failed to open mmap file {}, error: {}", file_name,
+                   strrc(rc));
+    return rc;
+  }
+
+  if (auto base_addr = mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
+      base_addr == MAP_FAILED) {
+    MLogger->error("Failed to mmap file {}, error: {}", file_name,
+                   strerror(errno));
+    rc = MMAP_ERROR;
+  } else {
+    *result = new MmapReadAbleFile(file_name, (char *)base_addr, file_size);
+    rc = OK;
+  }
+
+  if (close(fd)) {
+    MLogger->error("Failed to close mmap file {}, error: {}", file_name,
+                   strerror(errno));
+    rc = CLOSE_FILE_ERROR;
+  }
+  return rc;
+}
+
+MmapReadAbleFile::MmapReadAbleFile(string_view file_name, char *base_addr,
+                                   size_t file_size)
+    : file_name_(file_name), base_addr_(base_addr), file_size_(file_size) {}
+
+MmapReadAbleFile::~MmapReadAbleFile() {
+  if (int ret = ::munmap((void *)base_addr_, file_size_); ret) {
+    MLogger->error("Failed to munmap file {}, error: {}", file_name_,
+                   strerror(errno));
+  }
+}
+
+RC MmapReadAbleFile::Read(size_t offset, size_t len, string_view &buffer) {
+  if (offset + len > file_size_) {
+    buffer = {};
+    return OUT_OF_RANGE;
+  }
+  buffer = {base_addr_ + offset, len};
+  return OK;
+}
+
+RC FileManager::GetFileSize(string_view path, size_t *size) {
+  struct stat file_stat;
+  if (stat(path.data(), &file_stat)) {
+    MLogger->error("can not get {} stat, error: {}", path.data(),
+                   strerror(errno));
+    *size = 0;
+    return STAT_FILE_ERROR;
+  }
+  *size = file_stat.st_size;
   return OK;
 }
 

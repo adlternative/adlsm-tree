@@ -16,6 +16,7 @@ enum FileOptions {
 
 class WritAbleFile;
 class TempFile;
+class MmapReadAbleFile;
 
 class FileManager {
  public:
@@ -24,11 +25,14 @@ class FileManager {
   static RC Create(string_view path, FileOptions options);
   static RC Destroy(string_view path);
   static string FixDirName(string_view path);
+  static RC GetFileSize(string_view path, size_t *size);
 
   /* open */
   static RC OpenWritAbleFile(string_view filename, WritAbleFile **result);
   static RC OpenTempFile(string_view dir_path, string_view subfix,
                          TempFile **result);
+  static RC OpenMmapReadAbleFile(string_view filename,
+                                 MmapReadAbleFile **result);
 };
 
 class WritAbleFile {
@@ -65,6 +69,19 @@ class TempFile : public WritAbleFile {
 };
 
 ssize_t write_n(int fd, const char *buf, size_t len);
+
+class MmapReadAbleFile {
+ public:
+  MmapReadAbleFile(string_view file_name, char *base_addr, size_t file_size);
+  ~MmapReadAbleFile();
+  RC Read(size_t offset, size_t len, string_view &buffer);
+  auto Size() { return file_size_; }
+
+ private:
+  char *base_addr_;
+  size_t file_size_;
+  string file_name_;
+};
 
 }  // namespace adl
 

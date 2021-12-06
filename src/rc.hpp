@@ -21,6 +21,9 @@ enum RC {
   MAKESTEMP_ERROR,
   FILTER_BLOCK_ERROR,
   DB_CLOSED,
+  STAT_FILE_ERROR,
+  MMAP_ERROR,
+  OUT_OF_RANGE,
 };
 
 inline std::string_view strrc(RC rc) {
@@ -55,6 +58,12 @@ inline std::string_view strrc(RC rc) {
       return "filter block error";
     case DB_CLOSED:
       return "db closed";
+    case STAT_FILE_ERROR:
+      return "stat file error";
+    case MMAP_ERROR:
+      return "mmap error";
+    case OUT_OF_RANGE:
+      return "out of range";
     default:
       return "unknown error";
   }

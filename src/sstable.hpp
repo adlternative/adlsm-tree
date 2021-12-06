@@ -59,6 +59,19 @@ class SSTableWriter {
 
 string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]);
 
+class SSTable {};
+
+class SSTableReader {
+ public:
+  static RC Open(WritAbleFile *file, const DBOptions &options, SSTable **table);
+ private:
+  RC ReadMetaDataBlock();
+  RC ReadFooterBlock();
+  RC ReadIndexBlock();
+  RC ReadDataBlock();
+  RC ReadFilterBlock();
+};
+
 }  // namespace adl
 
 #endif  // ADL_LSM_TREE_SSTABLE_H__
