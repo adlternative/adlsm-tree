@@ -38,7 +38,7 @@ RC MemTable::BuildSSTable(string_view dbname) {
 
   unsigned char sha256[SHA256_DIGEST_LENGTH];
   TempFile *temp_file = nullptr;
-  auto rc = FileManager::OpenTempFile(&temp_file);
+  auto rc = FileManager::OpenTempFile(dbname, "tmp_sst_", &temp_file);
   if (rc) return rc;
   auto sstable = new SSTable(dbname, temp_file, *options_);
 

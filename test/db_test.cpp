@@ -1,8 +1,8 @@
 #include "../src/db.hpp"
 #include <gtest/gtest.h>
+using namespace adl;
 
 TEST(db, test_db_create) {
-  using namespace adl;
   DB *db = nullptr;
   DBOptions opts;
   string dbname = "/tmp/adl-testdb";
@@ -13,8 +13,26 @@ TEST(db, test_db_create) {
   delete db;
 }
 
-TEST(db, test_db_write) {
-  using namespace adl;
+TEST(db, test_db_write1) {
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "~/adldb";
+  opts.create_if_not_exists = true;
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  for (int i = 0; i < 300000; i++) {
+    string key = "key" + to_string(i);
+    string val = "value" + to_string(i);
+    ASSERT_EQ(db->Put(key, val), OK) << "put error";
+  }
+  for (int i = 0; i < 300000; i++) {
+    string key = "key" + to_string(i);
+    ASSERT_EQ(db->Delete(key), OK) << "delete error";
+  }
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+}
+
+TEST(db, test_db_write2) {
   DB *db = nullptr;
   DBOptions opts;
   string dbname = "/tmp/adl-testdb1";

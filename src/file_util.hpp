@@ -23,10 +23,12 @@ class FileManager {
   static bool IsDirectory(string_view path);
   static RC Create(string_view path, FileOptions options);
   static RC Destroy(string_view path);
+  static string FixDirName(string_view path);
+
   /* open */
-  static RC OpenWritAbleFile(string_view filename,
-                             WritAbleFile **result);
-  static RC OpenTempFile(TempFile **result);
+  static RC OpenWritAbleFile(string_view filename, WritAbleFile **result);
+  static RC OpenTempFile(string_view dir_path, string_view subfix,
+                         TempFile **result);
 };
 
 class WritAbleFile {
@@ -46,7 +48,7 @@ class WritAbleFile {
   static constexpr size_t kWritAbleFileBufferSize = 65536;
 
  protected:
-  std::string filename_;
+  std::string file_path_;
   int fd_;
   bool closed_;
 
@@ -59,7 +61,7 @@ class TempFile : public WritAbleFile {
  public:
   TempFile(const std::string &filename, int fd);
   RC ReName(string_view filename);
-  static RC Open(TempFile **result);
+  static RC Open(string_view dir_path, string_view subfix, TempFile **result);
 };
 
 ssize_t write_n(int fd, const char *buf, size_t len);

@@ -72,8 +72,11 @@ add_executable(sstable_test
 target_link_libraries(sstable_test crypto gtest gtest_main pthread fmt spdlog)
 
 # 文件工具测试
-add_executable(file_util_test src/file_util.cpp test/file_util_test.cpp)
-target_link_libraries(file_util_test gtest gtest_main spdlog fmt)
+add_executable(file_util_test
+               src/file_util.cpp
+               src/monitor_logger.cpp
+               test/file_util_test.cpp)
+target_link_libraries(file_util_test gtest gtest_main pthread spdlog fmt)
 
 add_test(NAME mem_table_test COMMAND mem_table_test)
 add_test(NAME db_test COMMAND db_test)

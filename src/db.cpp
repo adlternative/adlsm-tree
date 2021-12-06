@@ -1,4 +1,5 @@
 #include "db.hpp"
+#include <fmt/core.h>
 #include <spdlog/spdlog.h>
 #include <mutex>
 #include "file_util.hpp"
@@ -18,7 +19,7 @@ DB::DB(string_view dbname, DBOptions &options)
   MLog.SetDbNameAndOptions(dbname_, &options);
   for (int i = 0; i < options_->background_workers_number; i++)
     workers_.push_back(Worker::NewBackgroundWorker());
-  MLogger->info("DB have created");
+  MLogger->info("DB {} have created", dbname_);
 }
 
 DB::~DB() {
@@ -35,19 +36,20 @@ DB::~DB() {
 }
 
 RC DB::Open(string_view dbname, DBOptions &options, DB **dbptr) {
-  if (!FileManager::Exists(dbname)) {
+  string true_dbname(FileManager::FixDirName(dbname));
+  if (!FileManager::Exists(true_dbname)) {
     if (options.create_if_not_exists) {
-      auto rc = Create(dbname);
+      auto rc = Create(true_dbname);
     } else {
       return RC::NOT_FOUND;
     }
   }
 
-  if (!FileManager::IsDirectory(dbname)) {
+  if (!FileManager::IsDirectory(true_dbname)) {
     return IS_NOT_DIRECTORY;
   }
 
-  DB *db = new DB(dbname, options);
+  DB *db = new DB(true_dbname, options);
 
   /* load metadata... */
 

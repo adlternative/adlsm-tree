@@ -1,12 +1,15 @@
 #include "file_util.hpp"
 #include <fcntl.h>
 #include <linux/limits.h>
+#include <pwd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/dir.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <filesystem>
+#include "monitor_logger.hpp"
 
 namespace adl {
 
@@ -93,27 +96,46 @@ RC FileManager::Destroy(string_view path) {
   return OK;
 }
 
-RC FileManager::OpenWritAbleFile(string_view filename,
-                                 WritAbleFile **result) {
-  return WritAbleFile::Open(filename, result);
+string FileManager::FixDirName(string_view path) {
+  string true_path;
+  if (path.empty()) return ".";
+  if (path[0] == '~') {
+    const char *homedir;
+    if (!(homedir = getenv("HOME"))) homedir = getpwuid(getuid())->pw_dir;
+    if (homedir) {
+      true_path = homedir;
+      true_path += path.substr(1);
+      path = true_path;
+    }
+  }
+
+  if (path.back() == '/') {
+    return string(path);
+  }
+  return string(path) + "/";
 }
 
-RC FileManager::OpenTempFile(TempFile **result) {
-  return TempFile::Open(result);
+RC FileManager::OpenWritAbleFile(string_view file_path, WritAbleFile **result) {
+  return WritAbleFile::Open(file_path, result);
 }
 
-WritAbleFile::WritAbleFile(string_view filename, int fd)
-    : filename_(filename), fd_(fd), pos_(0), closed_(false) {}
+RC FileManager::OpenTempFile(string_view dir_path, string_view subfix,
+                             TempFile **result) {
+  return TempFile::Open(dir_path, subfix, result);
+}
 
-RC WritAbleFile::Open(string_view filename, WritAbleFile **result) {
+WritAbleFile::WritAbleFile(string_view file_path, int fd)
+    : file_path_(file_path), fd_(fd), pos_(0), closed_(false) {}
+
+RC WritAbleFile::Open(string_view file_path, WritAbleFile **result) {
   int fd =
-      ::open(filename.data(), O_TRUNC | O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
+      ::open(file_path.data(), O_TRUNC | O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
   if (fd < 0) {
     *result = nullptr;
     return OPEN_FILE_ERROR;
   }
 
-  *result = new WritAbleFile(filename, fd);
+  *result = new WritAbleFile(file_path, fd);
   return OK;
 }
 
@@ -205,28 +227,37 @@ RC WritAbleFile::Append(const std::string &data) {
   return OK;
 }
 
-TempFile::TempFile(const std::string &filename, int fd)
-    : WritAbleFile(filename, fd) {}
+TempFile::TempFile(const std::string &file_path, int fd)
+    : WritAbleFile(file_path, fd) {}
 
 RC TempFile::ReName(string_view new_file) {
-  int ret = rename(filename_.c_str(), new_file.data());
-  if (ret == -1) return RENAME_FILE_ERROR;
+  int ret = rename(file_path_.c_str(), new_file.data());
+  if (ret) {
+    MLogger->error("tempfile name:{} rename to {} failed: {}", file_path_,
+                   new_file, strerror(errno));
+    return RENAME_FILE_ERROR;
+  }
+  MLogger->info("tempfile name:{} rename to {}", file_path_, new_file);
   return OK;
 }
 
-RC TempFile::Open(TempFile **result) {
-  char tmpfile[] = "/tmp/adlsm_tree_XXXXXX";
-  int fd = mkstemp(tmpfile);
+RC TempFile::Open(string_view dir_path, string_view subfix, TempFile **result) {
+  string tmp_file(FileManager::FixDirName(dir_path));
+  tmp_file += subfix;
+  tmp_file += "XXXXXX";
+
+  int fd = mkstemp(tmp_file.data());
   if (fd == -1) {
     *result = nullptr;
+    MLogger->error("mkstemp {} failed: {}", tmp_file, strerror(errno));
     return MAKESTEMP_ERROR;
   }
-  std::string filename =
+  std::string file_path =
       std::filesystem::read_symlink(std::filesystem::path("/proc/self/fd/") /
                                     std::to_string(fd))
           .string();
-
-  *result = new TempFile(filename, fd);
+  MLogger->info("create new tempfile: {}", file_path);
+  *result = new TempFile(file_path, fd);
   return OK;
 }
 
