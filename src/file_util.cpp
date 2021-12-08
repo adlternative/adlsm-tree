@@ -17,7 +17,7 @@ namespace adl {
 
 bool FileManager::Exists(string_view path) {
   struct stat sb;
-  return stat(path.data(), &sb) == 0;
+  return stat(FileManager::FixFileName(path).c_str(), &sb) == 0;
 }
 
 bool FileManager::IsDirectory(string_view path) {
@@ -96,6 +96,20 @@ RC FileManager::Destroy(string_view path) {
     }
   }
   return OK;
+}
+
+string FileManager::FixFileName(string_view path) {
+  string true_path;
+  if (path[0] == '~') {
+    const char *homedir;
+    if (!(homedir = getenv("HOME"))) homedir = getpwuid(getuid())->pw_dir;
+    if (homedir) {
+      true_path = homedir;
+      true_path += path.substr(1);
+      path = true_path;
+    }
+  }
+  return true_path;
 }
 
 string FileManager::FixDirName(string_view path) {
@@ -234,13 +248,14 @@ TempFile::TempFile(const std::string &file_path, int fd)
     : WritAbleFile(file_path, fd) {}
 
 RC TempFile::ReName(string_view new_file) {
-  int ret = rename(file_path_.c_str(), new_file.data());
+  string true_path = FileManager::FixFileName(new_file);
+  int ret = rename(file_path_.c_str(), true_path.c_str());
   if (ret) {
     MLogger->error("tempfile name:{} rename to {} failed: {}", file_path_,
-                   new_file, strerror(errno));
+                   true_path, strerror(errno));
     return RENAME_FILE_ERROR;
   }
-  MLogger->info("tempfile name:{} rename to {}", file_path_, new_file);
+  MLogger->info("tempfile name:{} rename to {}", file_path_, true_path);
   return OK;
 }
 

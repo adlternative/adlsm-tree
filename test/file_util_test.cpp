@@ -5,10 +5,10 @@ using namespace adl;
 
 TEST(tempfile, temp_file) {
   TempFile *file = nullptr;
-  auto rc = TempFile::Open("/home/adl", "tmp_sst_", &file);
+  auto rc = TempFile::Open("~", "tmp_sst_", &file);
   ASSERT_EQ(rc, OK) << rc << std::endl;
 
-  auto s = "/home/adl/work.sst";
+  auto s = "~/work.sst";
   rc = file->ReName(s);
   EXPECT_EQ(rc, OK) << rc << std::endl;
 

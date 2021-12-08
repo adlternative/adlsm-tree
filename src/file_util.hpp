@@ -25,6 +25,7 @@ class FileManager {
   static RC Create(string_view path, FileOptions options);
   static RC Destroy(string_view path);
   static string FixDirName(string_view path);
+  static string FixFileName(string_view path);
   static RC GetFileSize(string_view path, size_t *size);
 
   /* open */
