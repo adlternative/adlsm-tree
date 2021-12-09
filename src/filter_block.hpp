@@ -54,7 +54,7 @@ class FilterBlockWriter {
 class FilterBlockReader {
  public:
   FilterBlockReader();
-  RC Init(const string &filter_block);
+  RC Init(string_view filter_block);
   /**
    * @brief 我们从外界传入 key 所在 FILTER BLOCK NUM，因为它和
    * DATA BLOCK NUM 是相同的。

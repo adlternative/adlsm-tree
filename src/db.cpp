@@ -1,6 +1,4 @@
 #include "db.hpp"
-#include <fmt/core.h>
-#include <spdlog/spdlog.h>
 #include <mutex>
 #include "file_util.hpp"
 #include "monitor_logger.hpp"
@@ -176,7 +174,8 @@ RC DB::DoMinorCompaction() {
 /* imm --> sstable */
 RC DB::BuildSSTable() {
   MLogger->info("DB is building sstable");
-  if (auto rc = imem_->BuildSSTable(dbname_); rc) return rc;
+  string sstable_path;
+  if (auto rc = imem_->BuildSSTable(dbname_, sstable_path); rc) return rc;
   /* 更新元数据跟踪新 sstable */
   return OK;
 }

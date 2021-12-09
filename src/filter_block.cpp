@@ -109,7 +109,7 @@ RC FilterBlockWriter::Keys2Block() {
 
 FilterBlockReader::FilterBlockReader() : filters_nums_(0) {}
 
-RC FilterBlockReader::Init(const string /* string_view */ &filter_blocks) {
+RC FilterBlockReader::Init(string_view filter_blocks) {
   filter_blocks_ = filter_blocks;
 
   auto filter_block_len = filter_blocks_.length();

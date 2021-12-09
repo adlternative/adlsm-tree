@@ -25,6 +25,5 @@ void MonitorLogger::SetDbNameAndOptions(const string &db_name,
   }
 }
 
-MonitorLogger::MonitorLogger()
-    : /* default_log_(true), */ logger(spdlog::stdout_color_mt("console")) {}
+MonitorLogger::MonitorLogger() : logger(spdlog::stdout_color_mt("console")) {}
 }  // namespace adl

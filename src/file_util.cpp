@@ -106,8 +106,9 @@ string FileManager::FixFileName(string_view path) {
     if (homedir) {
       true_path = homedir;
       true_path += path.substr(1);
-      path = true_path;
     }
+  } else {
+    true_path = path;
   }
   return true_path;
 }

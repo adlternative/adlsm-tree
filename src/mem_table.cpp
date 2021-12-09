@@ -33,8 +33,10 @@ RC MemTable::Get(string_view key, string &value) {
   }
 }
 
-RC MemTable::BuildSSTable(string_view dbname) {
+RC MemTable::BuildSSTable(string_view dbname, string &sstable_path) {
   MLogger->info("memtable -> sstable");
+  string true_path = FileManager::FixDirName(dbname);
+  dbname = true_path;
 
   unsigned char sha256[SHA256_DIGEST_LENGTH];
   TempFile *temp_file = nullptr;
@@ -42,26 +44,34 @@ RC MemTable::BuildSSTable(string_view dbname) {
   if (rc) return rc;
   auto sstable = new SSTableWriter(dbname, temp_file, *options_);
 
-  for (auto iter = table_.begin(); iter != table_.end(); iter++) {
-    MemKey memkey = iter->first;
-    string &value = iter->second;
-    string key = memkey.ToKey();
-    rc = sstable->Add(key, value);
-    if (rc) return rc;
-  }
-
-  rc = sstable->Final(sha256);
-  if (rc) return rc;
+  if (rc = ForEach([&](const MemKey &memkey, string_view value) -> RC {
+        string key = memkey.ToKey();
+        return sstable->Add(key, value);
+      });
+      rc)
+    return rc;
+  if (rc = sstable->Final(sha256); rc) return rc;
   string sha256_hex = sha256_digit_to_hex(sha256);
-  string new_sstable_name(dbname);
-  new_sstable_name += sha256_hex + ".sst";
-  temp_file->ReName(new_sstable_name);
+  sstable_path = dbname;
+  sstable_path += sha256_hex + ".sst";
+  temp_file->ReName(sstable_path);
   temp_file->Close();
 
-  MLogger->info("sstable {} created", new_sstable_name);
+  MLogger->info("sstable {} created", sstable_path);
   delete sstable;
   delete temp_file;
 
+  return OK;
+}
+
+RC MemTable::ForEach(
+    std::function<RC(const MemKey &key, string_view value)> func) {
+  for (auto iter = table_.begin(); iter != table_.end(); iter++) {
+    const MemKey &memkey = iter->first;
+    string_view value = iter->second;
+    auto rc = func(memkey, value);
+    if (rc) return rc;
+  }
   return OK;
 }
 

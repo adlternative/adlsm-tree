@@ -1,9 +1,10 @@
 #include "../src/sstable.hpp"
 #include <gtest/gtest.h>
+#include "../src/file_util.hpp"
 #include "../src/mem_table.hpp"
 #include "../src/options.hpp"
 
-TEST(sstable, test1) {
+void BuildSSTable(string_view dbname, string &sstable_path) {
   using namespace adl;
   DBOptions opts;
   MemTable table(opts);
@@ -19,6 +20,34 @@ TEST(sstable, test1) {
     ASSERT_EQ(table.Get(key, val), OK) << "get error";
     ASSERT_EQ(val, "value" + to_string(i));
   }
-  string dbname = "/tmp";
-  ASSERT_EQ(table.BuildSSTable(dbname), OK);
+  if (FileManager::Exists(dbname)) {
+    ASSERT_EQ(FileManager::Destroy(dbname), OK);
+    ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
+  }
+  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+}
+
+TEST(sstable, memtable_to_sstable) {
+  string unused;
+  BuildSSTable("/tmp/feiwudb", unused);
+}
+
+TEST(sstable, sstable_reader) {
+  using namespace adl;
+  auto dbname = "/tmp/feiwudb2";
+  string sstable_path;
+  SSTableReader *table;
+  MmapReadAbleFile *file;
+
+  if (FileManager::Exists(dbname)) {
+    ASSERT_EQ(FileManager::Destroy(dbname), OK);
+    ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
+  }
+  BuildSSTable("/tmp/feiwudb2", sstable_path);
+  auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  rc = SSTableReader::Open(file, &table);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  delete file;
+  delete table;
 }

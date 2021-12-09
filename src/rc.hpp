@@ -20,6 +20,8 @@ enum RC {
   RENAME_FILE_ERROR,
   MAKESTEMP_ERROR,
   FILTER_BLOCK_ERROR,
+  FOOTER_BLOCK_ERROR,
+  UN_SUPPORTED_FORMAT,
   DB_CLOSED,
   STAT_FILE_ERROR,
   MMAP_ERROR,
@@ -56,6 +58,10 @@ inline std::string_view strrc(RC rc) {
       return "make temp error";
     case FILTER_BLOCK_ERROR:
       return "filter block error";
+    case FOOTER_BLOCK_ERROR:
+      return "footer block error";
+    case UN_SUPPORTED_FORMAT:
+      return "unsupported format";
     case DB_CLOSED:
       return "db closed";
     case STAT_FILE_ERROR:

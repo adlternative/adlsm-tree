@@ -13,6 +13,7 @@ using namespace std;
 namespace adl {
 
 class WritAbleFile;
+class MmapReadAbleFile;
 struct DBOptions;
 
 /* Sorted Strings Table */
@@ -48,7 +49,7 @@ class SSTableWriter {
   BlockHandle meta_data_block_handle_;
 
   /* 尾信息块 */
-  FooterBlock foot_block_;
+  FooterBlockWriter foot_block_;
   // BlockHandle foot_block_handle_;
 
   SHA256_CTX sha256_;
@@ -59,17 +60,34 @@ class SSTableWriter {
 
 string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]);
 
-class SSTable {};
+// class SSTable {
+//  public:
+//   SSTable(MmapReadAbleFile *file);
+
+//  private:
+//   MmapReadAbleFile *file_;
+// };
 
 class SSTableReader {
  public:
-  static RC Open(WritAbleFile *file, const DBOptions &options, SSTable **table);
+  static RC Open(MmapReadAbleFile *file, SSTableReader **table);
+
+  SSTableReader(MmapReadAbleFile *file);
+
  private:
-  RC ReadMetaDataBlock();
   RC ReadFooterBlock();
+  RC ReadMetaBlock();
   RC ReadIndexBlock();
-  RC ReadDataBlock();
   RC ReadFilterBlock();
+  // RC ReadDataBlock();
+
+  MmapReadAbleFile *file_;
+  size_t file_size_;
+
+  FilterBlockReader filter_block_reader_;
+  BlockReader index_block_reader_;
+  BlockReader meta_block_reader_;
+  FooterBlockReader foot_block_reader_;
 };
 
 }  // namespace adl

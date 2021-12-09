@@ -1,5 +1,7 @@
 #include "../src/block.hpp"
 #include <gtest/gtest.h>
+#include "../src/mem_table.hpp"
+#include "../src/options.hpp"
 
 void AppendKV2Expect(std::string &expect, int shared_key_len,
                      int unshared_key_len, int value_len,
@@ -110,4 +112,165 @@ TEST(block_test, Add4) {
   AppendRS2Expect(expect, {0});
   EXPECT_EQ(result, expect);
   EXPECT_EQ(result, result2);
+}
+
+int easy_cmp(std::string_view key1, std::string_view key2) {
+  return key1.compare(key2);
+}
+
+TEST(block_test, Get1) {
+  using namespace adl;
+  BlockWriter block;
+  BlockReader block_reader;
+  block.Add("key0", "v0");
+  block.Add("key1", "v1");
+  block.Add("key2", "v2");
+  string result;
+  block.Final(result);
+  block.Reset();
+  string value;
+  RC rc;
+
+  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
+  rc = block_reader.Get("key0", value);
+  ASSERT_EQ(rc, OK) << strrc(rc);
+  EXPECT_EQ(value, "v0");
+  rc = block_reader.Get("key1", value);
+  ASSERT_EQ(rc, OK) << strrc(rc);
+  EXPECT_EQ(value, "v1");
+  rc = block_reader.Get("key2", value);
+  ASSERT_EQ(rc, OK) << strrc(rc);
+  EXPECT_EQ(value, "v2");
+}
+
+TEST(block_test, Get2) {
+  using namespace adl;
+  BlockWriter block;
+  BlockReader block_reader;
+  map<string, string> m;
+  string result;
+  RC rc;
+  for (int i = 0; i < 20; i++) {
+    string key("key");
+    key += std::to_string(i);
+    string value("value");
+    value += std::to_string(i);
+    m.insert({key, value});
+  }
+  for (auto &p : m) block.Add(p.first, p.second);
+
+  block.Final(result);
+  block.Reset();
+
+  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
+
+  for (int i = 0; i < 20; i++) {
+    string key("key");
+    key += std::to_string(i);
+    string value;
+    string expect("value");
+    expect += std::to_string(i);
+    rc = block_reader.Get(key, value);
+    ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
+    EXPECT_EQ(value, expect);
+  }
+}
+
+TEST(block_test, Get3) {
+  using namespace adl;
+  BlockWriter block;
+  BlockReader block_reader;
+  map<string, string> m;
+  string result;
+  RC rc;
+  for (int i = 0; i < 2000; i++) {
+    string key("key");
+    key += std::to_string(i);
+    string value("value");
+    value += std::to_string(i);
+    m.insert({key, value});
+  }
+  for (auto &p : m) block.Add(p.first, p.second);
+
+  block.Final(result);
+  block.Reset();
+
+  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
+
+  for (int i = 0; i < 2000; i++) {
+    string key("key");
+    key += std::to_string(i);
+    string value;
+    string expect("value");
+    expect += std::to_string(i);
+    rc = block_reader.Get(key, value);
+    ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
+    EXPECT_EQ(value, expect);
+  }
+}
+
+TEST(block_test, Get4) {
+  using namespace adl;
+  BlockWriter block;
+  BlockReader block_reader;
+  DBOptions opt;
+  MemTable mem_table(opt);
+  string result;
+  RC rc;
+  for (int i = 0; i < 2000; i++) {
+    string key("key");
+    key += std::to_string(i);
+    string value("value");
+    value += std::to_string(i);
+    MemKey mem_key(key, i, OP_PUT);
+    mem_table.Put(mem_key, value);
+  }
+  rc = mem_table.ForEach([&](const MemKey &memkey, string_view value) -> RC {
+    string key = memkey.ToKey();
+    return block.Add(key, value);
+  });
+  ASSERT_EQ(rc, OK) << strrc(rc);
+
+  block.Final(result);
+  block.Reset();
+
+  ASSERT_EQ(block_reader.Init(result, CmpKeyAndUserKey), OK);
+
+  for (int i = 0; i < 2000; i++) {
+    string key("key");
+    key += std::to_string(i);
+    string value;
+    string expect("value");
+    expect += std::to_string(i);
+    rc = block_reader.Get(key, value);
+    ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
+    EXPECT_EQ(value, expect);
+  }
+
+  for (int i = 0; i < 2000; i++) {
+    string key("key");
+    key += std::to_string(2000 + i);
+    string value;
+    rc = block_reader.Get(key, value);
+    ASSERT_EQ(rc, NOT_FOUND) << "batch " << i << ": " << strrc(rc);
+  }
+
+  for (int i = 0; i < 2000; i++) {
+    string key("key");
+    key += std::to_string(-1 - i);
+    string value;
+    rc = block_reader.Get(key, value);
+    ASSERT_EQ(rc, NOT_FOUND) << "batch " << i << ": " << strrc(rc);
+  }
+
+  for (int i = 2000 - 1; i >= 0; --i) {
+    string key("key");
+    key += std::to_string(i);
+    string value;
+    string expect("value");
+    expect += std::to_string(i);
+    rc = block_reader.Get(key, value);
+    ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
+    EXPECT_EQ(value, expect);
+  }
 }

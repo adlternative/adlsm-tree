@@ -2,10 +2,10 @@
 #define ADL_LSM_TREE_MEM_TABLE_H__
 
 #include <string.h>
+#include <functional>
 #include <map>
 #include <string>
 #include "rc.hpp"
-
 namespace adl {
 
 using namespace std;
@@ -30,13 +30,21 @@ struct MemKey {
     }
     return user_key_ < other.user_key_;
   }
-  string ToKey() {
+  string ToKey() const {
     string ret(user_key_);
     char temp[8];
     memcpy(temp, &seq_, 8);
     ret.append(temp, 8);
-    memcpy(temp, &op_type_, 1);
+    temp[0] = op_type_;
+    ret.append(temp, 1);
     return ret;
+  }
+
+  void FromKey(string_view key) {
+    auto len = key.size();
+    op_type_ = (OpType)key[len - 1];
+    memcpy(&seq_, &key[len - 9], 8);
+    user_key_ = string(key.data(), key.size() - 9);
   }
 
   /* user_key 绑定最大序列号作为查询的依据 */
@@ -65,7 +73,8 @@ class MemTable {
   MemTable(const DBOptions &options);
   RC Put(const MemKey &key, string_view value);
   RC Get(string_view key, string &value);
-  RC BuildSSTable(string_view dbname);
+  RC ForEach(std::function<RC(const MemKey &key, string_view value)> func);
+  RC BuildSSTable(string_view dbname, string &sstable_path);
   size_t GetMemTableSize();
 
  private:

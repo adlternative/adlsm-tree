@@ -2,8 +2,10 @@
 #include <openssl/sha.h>
 #include <iomanip>
 #include <sstream>
+#include "block.hpp"
 #include "db.hpp"
 #include "file_util.hpp"
+#include "monitor_logger.hpp"
 
 namespace adl {
 
@@ -62,7 +64,7 @@ RC SSTableWriter::Final(unsigned char sha256_digit[]) {
   filter_block_handle_.SetMeta(offset_, (int)buffer_.size());
   offset_ += (int)buffer_.size();
   string encoded_filter_block_handle;
-  data_block_handle_.EncodeMeta(encoded_filter_block_handle);
+  filter_block_handle_.EncodeMeta(encoded_filter_block_handle);
   /* Meta 块 */
   meta_data_block_.Add("filter", encoded_filter_block_handle);
   meta_data_block_.Final(buffer_);
@@ -81,7 +83,9 @@ RC SSTableWriter::Final(unsigned char sha256_digit[]) {
   meta_data_block_handle_.EncodeMeta(encode_meta_block_handle);
   index_block_handle_.EncodeMeta(encode_index_block_handle);
   foot_block_.Add(encode_meta_block_handle, encode_index_block_handle);
-  foot_block_.Final(buffer_);
+  RC rc = foot_block_.Final(buffer_);
+  if (rc != OK) MLogger->critical("foot_block Final failed: {}", strrc(rc));
+
   SHA256_Update(&sha256_, buffer_.c_str(), buffer_.size());
   file_->Append(buffer_);
   offset_ += (int)buffer_.size();
@@ -90,4 +94,115 @@ RC SSTableWriter::Final(unsigned char sha256_digit[]) {
   return OK;
 }
 
+RC SSTableReader::ReadFooterBlock() {
+  RC rc;
+  string_view footer_block_buffer;
+
+  if (rc = file_->Read(file_size_ - FooterBlockWriter::footer_size,
+                       FooterBlockWriter::footer_size, footer_block_buffer);
+      rc) {
+    MLogger->error("Read file error: off:{} size:{}",
+                   file_size_ - FooterBlockWriter::footer_size,
+                   FooterBlockWriter::footer_size);
+    return rc;
+  }
+  if (rc = foot_block_reader_.Init(footer_block_buffer); rc) {
+    MLogger->error("Init foot block error: {}", strrc(rc));
+    return rc;
+  }
+  return OK;
+}
+
+RC SSTableReader::ReadIndexBlock() {
+  RC rc;
+  string_view index_block_buffer;
+  auto index_block_handle = foot_block_reader_.index_block_handle();
+  MLogger->info("Index Block Handle: off:{} size:{}",
+                index_block_handle.block_offset_,
+                index_block_handle.block_size_);
+
+  if (rc = file_->Read(index_block_handle.block_offset_,
+                       index_block_handle.block_size_, index_block_buffer);
+      rc) {
+    MLogger->error("Read index block buffer error: off:{} size:{}",
+                   index_block_handle.block_offset_,
+                   index_block_handle.block_size_);
+    return rc;
+  }
+  if (rc = index_block_reader_.Init(index_block_buffer, CmpKeyAndUserKey); rc) {
+    MLogger->error("Init index block error: {}", strrc(rc));
+    return rc;
+  }
+  return OK;
+}
+
+RC SSTableReader::ReadMetaBlock() {
+  RC rc;
+  string_view meta_block_buffer;
+  auto meta_block_handle = foot_block_reader_.meta_block_handle();
+  MLogger->info("Meta Block Handle: off:{} size:{}",
+                meta_block_handle.block_offset_, meta_block_handle.block_size_);
+
+  if (rc = file_->Read(meta_block_handle.block_offset_,
+                       meta_block_handle.block_size_, meta_block_buffer);
+      rc) {
+    MLogger->error("Read meta block buffer error: off:{} size:{}",
+                   meta_block_handle.block_offset_,
+                   meta_block_handle.block_size_);
+    return rc;
+  }
+  if (rc = meta_block_reader_.Init(meta_block_buffer, CmpKeyAndUserKey); rc) {
+    MLogger->error("Init meta block error: {}", strrc(rc));
+    return rc;
+  }
+  return OK;
+}
+
+RC SSTableReader::ReadFilterBlock() {
+  RC rc;
+  BlockHandle filter_block_handle;
+  string filter_block_handle_buffer;
+  string_view filter_block_buffer;
+
+  if (rc = meta_block_reader_.Get("filter", filter_block_handle_buffer); rc) {
+    MLogger->error("Get filter block handle error: {}", strrc(rc));
+    return rc;
+  }
+
+  filter_block_handle.DecodeFrom(filter_block_handle_buffer);
+
+  if (rc = file_->Read(filter_block_handle.block_offset_,
+                       filter_block_handle.block_size_, filter_block_buffer);
+      rc) {
+    MLogger->error("Read filter block buffer error: off:{} size:{}",
+                   filter_block_handle.block_offset_,
+                   filter_block_handle.block_size_);
+    return rc;
+  }
+
+  if (rc = filter_block_reader_.Init(filter_block_buffer); rc) {
+    MLogger->error("Init filter block error: {}", strrc(rc));
+    return rc;
+  }
+  return OK;
+}
+
+RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table) {
+  SSTableReader *t = new SSTableReader(file);
+  RC rc;
+  /* read footer */
+  if (rc = t->ReadFooterBlock(); rc) return rc;
+  /* read index */
+  if (rc = t->ReadIndexBlock(); rc) return rc;
+  /* read meta */
+  if (rc = t->ReadMetaBlock(); rc) return rc;
+  /* read filter */
+  if (rc = t->ReadFilterBlock(); rc) return rc;
+  /* no read data! */
+  *table = t;
+  return OK;
+}
+
+SSTableReader::SSTableReader(MmapReadAbleFile *file)
+    : file_(file), file_size_(file_->Size()) {}
 }  // namespace adl

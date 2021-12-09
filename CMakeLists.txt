@@ -48,8 +48,18 @@ add_executable(db_test
 target_link_libraries(db_test crypto gtest gtest_main pthread fmt spdlog)
 
 # 块测试
-add_executable(block_test src/block.cpp test/block_test.cpp)
-target_link_libraries(block_test crypto gtest gtest_main)
+add_executable(block_test
+               src/encode.cpp
+               src/block.cpp
+               src/monitor_logger.cpp
+               src/mem_table.cpp
+               src/murmur3_hash.cpp
+               src/filter_block.cpp
+               src/footer_block.cpp
+               src/sstable.cpp
+               src/file_util.cpp
+               test/block_test.cpp)
+target_link_libraries(block_test crypto gtest gtest_main pthread fmt spdlog)
 
 # 过滤器块测试
 add_executable(filter_block_test src/encode.cpp src/filter_block.cpp src/murmur3_hash.cpp test/filter_block_test.cpp)
