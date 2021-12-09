@@ -252,11 +252,11 @@ RC TempFile::ReName(string_view new_file) {
   string true_path = FileManager::FixFileName(new_file);
   int ret = rename(file_path_.c_str(), true_path.c_str());
   if (ret) {
-    MLogger->error("tempfile name:{} rename to {} failed: {}", file_path_,
+    MLog->error("tempfile name:{} rename to {} failed: {}", file_path_,
                    true_path, strerror(errno));
     return RENAME_FILE_ERROR;
   }
-  MLogger->info("tempfile name:{} rename to {}", file_path_, true_path);
+  MLog->info("tempfile name:{} rename to {}", file_path_, true_path);
   return OK;
 }
 
@@ -268,7 +268,7 @@ RC TempFile::Open(string_view dir_path, string_view subfix, TempFile **result) {
   int fd = mkstemp(tmp_file.data());
   if (fd == -1) {
     *result = nullptr;
-    MLogger->error("mkstemp {} failed: {}", tmp_file, strerror(errno));
+    MLog->error("mkstemp {} failed: {}", tmp_file, strerror(errno));
     return MAKESTEMP_ERROR;
   }
 
@@ -276,7 +276,7 @@ RC TempFile::Open(string_view dir_path, string_view subfix, TempFile **result) {
       std::filesystem::read_symlink(std::filesystem::path("/proc/self/fd/") /
                                     std::to_string(fd))
           .string();
-  MLogger->info("create new tempfile: {}", file_path);
+  MLog->info("create new tempfile: {}", file_path);
   *result = new TempFile(file_path, fd);
   return OK;
 }
@@ -291,14 +291,14 @@ RC FileManager::OpenMmapReadAbleFile(string_view file_name,
   }
   size_t file_size = 0;
   if (rc = GetFileSize(file_name, &file_size); rc) {
-    MLogger->error("Failed to open mmap file {}, error: {}", file_name,
+    MLog->error("Failed to open mmap file {}, error: {}", file_name,
                    strrc(rc));
     return rc;
   }
 
   if (auto base_addr = mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
       base_addr == MAP_FAILED) {
-    MLogger->error("Failed to mmap file {}, error: {}", file_name,
+    MLog->error("Failed to mmap file {}, error: {}", file_name,
                    strerror(errno));
     rc = MMAP_ERROR;
   } else {
@@ -307,7 +307,7 @@ RC FileManager::OpenMmapReadAbleFile(string_view file_name,
   }
 
   if (close(fd)) {
-    MLogger->error("Failed to close mmap file {}, error: {}", file_name,
+    MLog->error("Failed to close mmap file {}, error: {}", file_name,
                    strerror(errno));
     rc = CLOSE_FILE_ERROR;
   }
@@ -320,7 +320,7 @@ MmapReadAbleFile::MmapReadAbleFile(string_view file_name, char *base_addr,
 
 MmapReadAbleFile::~MmapReadAbleFile() {
   if (int ret = ::munmap((void *)base_addr_, file_size_); ret) {
-    MLogger->error("Failed to munmap file {}, error: {}", file_name_,
+    MLog->error("Failed to munmap file {}, error: {}", file_name_,
                    strerror(errno));
   }
 }
@@ -337,7 +337,7 @@ RC MmapReadAbleFile::Read(size_t offset, size_t len, string_view &buffer) {
 RC FileManager::GetFileSize(string_view path, size_t *size) {
   struct stat file_stat;
   if (stat(path.data(), &file_stat)) {
-    MLogger->error("can not get {} stat, error: {}", path.data(),
+    MLog->error("can not get {} stat, error: {}", path.data(),
                    strerror(errno));
     *size = 0;
     return STAT_FILE_ERROR;

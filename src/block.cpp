@@ -162,7 +162,7 @@ RC BlockReader::BsearchRestartPoint(string_view key, int *index) {
                                        &shared_key_len, &unshared_key_len,
                                        &value_len, restarts_key);
         rc) {
-      MLogger->error("DecodeRestartsPointKey error: {}", strrc(rc));
+      MLog->error("DecodeRestartsPointKey error: {}", strrc(rc));
       return rc;
     }
     if (cmp_(restarts_key, key) < 0) {
@@ -176,7 +176,7 @@ RC BlockReader::BsearchRestartPoint(string_view key, int *index) {
     if ((rc = DecodeRestartsPointKey(data_.data() + restarts_[left],
                                      &shared_key_len, &unshared_key_len,
                                      &value_len, restarts_key))) {
-      MLogger->error("DecodeRestartsPointKey error: {}", strrc(rc));
+      MLog->error("DecodeRestartsPointKey error: {}", strrc(rc));
       return rc;
     }
     if (!cmp_(restarts_key, key)) {

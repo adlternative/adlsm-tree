@@ -34,7 +34,7 @@ RC MemTable::Get(string_view key, string &value) {
 }
 
 RC MemTable::BuildSSTable(string_view dbname, string &sstable_path) {
-  MLogger->info("memtable -> sstable");
+  MLog->info("memtable -> sstable");
   string true_path = FileManager::FixDirName(dbname);
   dbname = true_path;
 
@@ -57,7 +57,7 @@ RC MemTable::BuildSSTable(string_view dbname, string &sstable_path) {
   temp_file->ReName(sstable_path);
   temp_file->Close();
 
-  MLogger->info("sstable {} created", sstable_path);
+  MLog->info("sstable {} created", sstable_path);
   delete sstable;
   delete temp_file;
 

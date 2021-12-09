@@ -26,8 +26,8 @@ class MonitorLogger {
   // atomic<bool> default_log_;
 };
 
-#define MLog MonitorLogger::Logger()
-#define MLogger MonitorLogger::Logger().logger
+#define MLogger MonitorLogger::Logger()
+#define MLog MonitorLogger::Logger().logger
 
 }  // namespace adl
 

@@ -14,14 +14,14 @@ DB::DB(string_view dbname, DBOptions &options)
       closed_(false),
       is_compacting_(false) {
   /* 后台工作者线程，目前只有一个线程 */
-  MLog.SetDbNameAndOptions(dbname_, &options);
+  MLogger.SetDbNameAndOptions(dbname_, &options);
   for (int i = 0; i < options_->background_workers_number; i++)
     workers_.push_back(Worker::NewBackgroundWorker());
-  MLogger->info("DB {} have created", dbname_);
+  MLog->info("DB {} have created", dbname_);
 }
 
 DB::~DB() {
-  MLogger->info("DB is closing");
+  MLog->info("DB is closing");
   if (!closed_) Close();
   for (auto worker : workers_) {
     worker->Stop();
@@ -29,7 +29,7 @@ DB::~DB() {
   }
   if (mem_) delete mem_;
   if (imem_) delete imem_;
-  MLogger->info("DB closed");
+  MLog->info("DB closed");
   spdlog::drop(options_->logger_name);
 }
 
@@ -72,7 +72,7 @@ RC DB::Close() {
 
 RC DB::Put(string_view key, string_view value) {
   if (auto rc = Write(key, value, OP_PUT); rc) {
-    MLogger->error("Put key:{} value:{} failed", key, value);
+    MLog->error("Put key:{} value:{} failed", key, value);
     return rc;
   }
   return OK;
@@ -80,7 +80,7 @@ RC DB::Put(string_view key, string_view value) {
 
 RC DB::Delete(string_view key) {
   if (auto rc = Write(key, "", OP_PUT); rc) {
-    MLogger->error("Delete key:{} failed", key);
+    MLog->error("Delete key:{} failed", key);
     return rc;
   }
   return OK;
@@ -88,7 +88,7 @@ RC DB::Delete(string_view key) {
 
 RC DB::Get(string_view key, std::string &value) {
   if (auto rc = mem_->Get(key, value); rc) {
-    MLogger->error("Get {} from memtable failed", key);
+    MLog->error("Get {} from memtable failed", key);
     return rc;
   }
   return OK;
@@ -98,7 +98,7 @@ RC DB::Write(string_view key, string_view value, OpType op) {
   lock_guard<mutex> lock(mutex_);
   /* check if need freeze mem or compaction 这可能需要好一会儿 */
   if (auto rc = CheckMemAndCompaction(); rc) {
-    MLogger->error("DB CheckMemAndCompaction failed: {}", strrc(rc));
+    MLog->error("DB CheckMemAndCompaction failed: {}", strrc(rc));
     return rc;
   }
   /* write WAL */
@@ -116,9 +116,9 @@ RC DB::CheckMemAndCompaction() {
     if (!NeedFreezeMemTable()) break;
     /* memtable 满了，如果 imem 非空 等待
     minor compaction 将 imem 置为空 */
-    MLogger->info("DB wait until imem empty");
+    MLog->info("DB wait until imem empty");
     while (imem_ != nullptr) background_work_done_cond_.wait(lock);
-    MLogger->info("DB wait imem empty ok");
+    MLog->info("DB wait imem empty ok");
     /* mem -> imem */
     FreezeMemTable();
     /* 检查是否需要 Compaction */
@@ -145,7 +145,7 @@ RC DB::DoCompaction() {
     rc = UN_IMPLEMENTED;
   }
   if (rc) {
-    MLogger->error("DB compaction failed: {}", strrc(rc));
+    MLog->error("DB compaction failed: {}", strrc(rc));
     return rc;
   }
 
@@ -160,9 +160,9 @@ RC DB::DoCompaction() {
 }
 
 RC DB::DoMinorCompaction() {
-  MLogger->info("DB is doing minor compaction");
+  MLog->info("DB is doing minor compaction");
   if (auto rc = BuildSSTable(); rc) {
-    MLogger->error("DB build sstable failed: {}", strrc(rc));
+    MLog->error("DB build sstable failed: {}", strrc(rc));
     return rc;
   }
   /* 等会改成智能指针 */
@@ -173,7 +173,7 @@ RC DB::DoMinorCompaction() {
 
 /* imm --> sstable */
 RC DB::BuildSSTable() {
-  MLogger->info("DB is building sstable");
+  MLog->info("DB is building sstable");
   string sstable_path;
   if (auto rc = imem_->BuildSSTable(dbname_, sstable_path); rc) return rc;
   /* 更新元数据跟踪新 sstable */
@@ -182,7 +182,7 @@ RC DB::BuildSSTable() {
 
 /* mem -> imem */
 void DB::FreezeMemTable() {
-  MLogger->info("DB mem -> imem");
+  MLog->info("DB mem -> imem");
   imem_ = mem_;
   mem_ = new MemTable(*options_);
 }
