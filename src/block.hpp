@@ -33,9 +33,13 @@ class BlockReader {
 
   /* 点查 */
   RC Get(string_view key, string &value);
+  RC GetGreaterOrEqualTo(string_view key, string &value);
 
  private:
   RC BsearchRestartPoint(string_view key, int *index);
+  RC GetInternal(string_view key, string &value,
+                 const std::function<int(string_view, string_view)> &cmp_fn,
+                 int *index);
 
   string data_;
   /* 既是重启点数组的起点偏移量，也是数据项的结束偏移量 */
@@ -65,6 +69,13 @@ struct BlockHandle {
 };
 
 int CmpKeyAndUserKey(string_view key, string_view user_key);
+RC DecodeRestartsPointKeyWrap(const char *restart_record,
+                              string_view &restarts_key);
+RC DecodeRestartsPointKey(const char *restart_record, int *shared_key_len,
+                          int *unshared_key_len, int *value_len,
+                          string_view &restarts_key);
+RC DecodeRestartsPointValueWrap(const char *restart_record,
+                                string_view &restarts_value);
 
 }  // namespace adl
 

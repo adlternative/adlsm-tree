@@ -274,3 +274,30 @@ TEST(block_test, Get4) {
     EXPECT_EQ(value, expect);
   }
 }
+
+TEST(block_test, GetGreaterOrEqualTo) {
+  using namespace adl;
+  BlockWriter block;
+  BlockReader block_reader;
+  block.Add("key1", "v1");
+  block.Add("key3", "v3");
+  block.Add("key5", "v5");
+  string result;
+  block.Final(result);
+  block.Reset();
+  string value;
+  RC rc;
+
+  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
+  rc = block_reader.GetGreaterOrEqualTo("key0", value);
+  ASSERT_EQ(rc, OK) << strrc(rc);
+  EXPECT_EQ(value, "v1");
+  rc = block_reader.GetGreaterOrEqualTo("key2", value);
+  ASSERT_EQ(rc, OK) << strrc(rc);
+  EXPECT_EQ(value, "v3");
+  rc = block_reader.GetGreaterOrEqualTo("key4", value);
+  ASSERT_EQ(rc, OK) << strrc(rc);
+  EXPECT_EQ(value, "v5");
+  rc = block_reader.GetGreaterOrEqualTo("key6", value);
+  ASSERT_EQ(rc, NOT_FOUND) << strrc(rc);
+}
