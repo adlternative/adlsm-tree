@@ -20,10 +20,9 @@ void BuildSSTable(string_view dbname, string &sstable_path) {
     ASSERT_EQ(table.Get(key, val), OK) << "get error";
     ASSERT_EQ(val, "value" + to_string(i));
   }
-  if (FileManager::Exists(dbname)) {
-    ASSERT_EQ(FileManager::Destroy(dbname), OK);
-    ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
-  }
+  if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
+  ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
+
   ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
 }
 
@@ -36,18 +35,25 @@ TEST(sstable, sstable_reader) {
   using namespace adl;
   auto dbname = "/tmp/feiwudb2";
   string sstable_path;
-  SSTableReader *table;
+  SSTableReader *sstable;
   MmapReadAbleFile *file;
 
-  if (FileManager::Exists(dbname)) {
-    ASSERT_EQ(FileManager::Destroy(dbname), OK);
-    ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
-  }
   BuildSSTable("/tmp/feiwudb2", sstable_path);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
-  rc = SSTableReader::Open(file, &table);
+  rc = SSTableReader::Open(file, &sstable);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  for (int i = 0; i < 100; i++) {
+    string key = "key" + to_string(i);
+    string val;
+    string inner_key = NewMinInnerKey(key);
+    auto rc = sstable->Get(inner_key, val);
+    std::cout << "k " << key << "v " << val << std::endl;
+    EXPECT_EQ(rc, OK) << "Get " << key << " error";
+    if (rc == OK) {
+      EXPECT_EQ(val, "value" + to_string(i));
+    }
+  }
   delete file;
-  delete table;
+  delete sstable;
 }

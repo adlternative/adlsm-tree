@@ -1,6 +1,7 @@
 #include "filter_block.hpp"
 #include <string.h>
 #include "encode.hpp"
+#include "monitor_logger.hpp"
 #include "murmur3_hash.hpp"
 
 namespace adl {
@@ -55,7 +56,7 @@ bool BloomFilter::IsKeyExists(string_view key, string_view bitmap) {
     int bit_pos = (int)(h % bitmap_bits_len);
     /* 一定不在 */
     if (!(bitmap[bit_pos / 8] & (1 << (bit_pos % 8)))) return false;
-  }
+}
   /* 可能存在 */
   return true;
 }
@@ -144,6 +145,11 @@ RC FilterBlockReader::Init(string_view filter_blocks) {
 
   filters_offsets_ = {&filter_blocks_[filters_offsets_offset_],
                       sizeof(int) * filters_nums_};
+  MLog->info(
+      "FilterBlockReader filter_block_len:{}, filters_nums_:{}, "
+      "filters_offsets_offset_:{}, filters_zero_offset:{}",
+      filter_block_len, filters_nums_, filters_offsets_offset_,
+      filters_zero_offset);
 
   return OK;
 }
@@ -154,8 +160,11 @@ RC FilterBlockReader::CreateFilterAlgorithm() {
 
   string_view type = filter_info_.substr(0, 2);
   if (type != kBloomFilter) return FILTER_BLOCK_ERROR;
+
   int bits_per_key = 0;
   Decode32(&filter_info_[3], &bits_per_key);
+  MLog->info("FilterBlockReader Use BloomFilter algorithm, bits_per_key:{}",
+             bits_per_key);
   method_ = std::make_unique<BloomFilter>(bits_per_key);
   return OK;
 }
@@ -172,8 +181,6 @@ bool FilterBlockReader::IsKeyExists(int filter_block_num, string_view key) {
 
   return method_->IsKeyExists(
       key, {&filter_blocks_[filter_offset1], &filter_blocks_[filter_offset2]});
-
-  return true;
 }
 
 }  // namespace adl

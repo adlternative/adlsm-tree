@@ -1,6 +1,7 @@
 #include "block.hpp"
 #include <cstddef>
 #include "encode.hpp"
+#include "keys.hpp"
 #include "monitor_logger.hpp"
 
 namespace adl {
@@ -68,9 +69,12 @@ void BlockWriter::Reset() {
 
 bool BlockWriter::Empty() { return !entries_len_; }
 
-RC BlockReader::Init(string_view data,
-                     std::function<int(string_view, string_view)> &&cmp) {
-  cmp_ = std::move(cmp);
+RC BlockReader::Init(
+    string_view data, std::function<int(string_view, string_view)> &&cmp,
+    std::function<RC(string_view, string_view, string_view innner_key,
+                     string &value)> &&handle_result) {
+  cmp_fn_ = std::move(cmp);
+  handle_result_fn_ = std::move(handle_result);
   data_ = data;
   const char *buffer = data_.data();
   size_t data_len = data.length();
@@ -88,24 +92,33 @@ RC BlockReader::Init(string_view data,
   return OK;
 }
 
+/* 找到恰好大于等于 inner_key 的项执行 handle_result() */
 RC BlockReader::GetInternal(
-    string_view key, string &value,
-    const std::function<int(string_view, string_view)> &cmp_fn,
-    int *ret_index) {
+    string_view inner_key,
+    const std::function<RC(string_view, string_view)> &handle_result) {
   int restarts_len = (int)restarts_.size();
-  int key_len = (int)key.length();
+  int key_len = (int)inner_key.length();
   int index = 0;
   /* 二分查找最近的小于 key 的重启点 如果 key 越界了，那就直接返回没找到 */
-  auto rc = BsearchRestartPoint(key, &index);
-  if (ret_index) *ret_index = index;
+  auto rc = BsearchRestartPoint(inner_key, &index);
   if (rc) return rc;
-  if (index < 0 || index >= restarts_len) return NOT_FOUND;
+  if (index >= restarts_len) return NOT_FOUND;
+  if (index == -1) {
+    const char *restart_record = data_.data() + restarts_[0];
+    string_view key;
+    string_view val;
+    if (rc = DecodeRestartsPointKeyAndValueWrap(restart_record, key, val); rc)
+      return rc;
+    return handle_result(key, val);
+  }
 
-  /* 剩下的线性扫描 */
+  /* 剩下的线性扫描 找到恰好大于等于 inner_key 的地方 */
   auto cur_entry = data_.data() + restarts_[index];
   string last_key;
-  for (int i = 0; i < BlockWriter::restarts_block_len_ &&
-                  cur_entry < data_.data() + restarts_offset_;
+  int i;
+
+  for (i = 0; i < BlockWriter::restarts_block_len_ &&
+              cur_entry < data_.data() + restarts_offset_;
        i++) {
     int value_len;
     int unshared_key_len;
@@ -115,43 +128,39 @@ RC BlockReader::GetInternal(
     Decode32(cur_entry + sizeof(int) * 2, &value_len);
     string cur_key;
     /* expect ok */
-    if (last_key.length() >= shared_key_len) {
+    if (last_key.length() >= shared_key_len)
       cur_key = last_key.substr(0, shared_key_len);
-    }
     cur_key.append(cur_entry + sizeof(int) * 3, (size_t)(unshared_key_len));
-    int cmp = cmp_fn(cur_key, key);
-    if (!cmp) {
-      value.assign(cur_entry + sizeof(int) * 3 + unshared_key_len, value_len);
-      return OK;
-    } else if (cmp < 0) {
+    int cmp = cmp_fn_(cur_key, inner_key);
+    /* 恰好大于等于 （而非强制等于） */
+    if (cmp >= 0) {
+      return handle_result(
+          cur_key,
+          {cur_entry + sizeof(int) * 3 + unshared_key_len, (size_t)value_len});
+    } else {
       cur_entry += sizeof(int) * 3 + unshared_key_len + value_len;
     }
     last_key = std::move(cur_key);
   }
+
+  /* 还没有越界 我们检测下一个重启点 */
+  if (i == BlockWriter::restarts_block_len_ &&
+      cur_entry < data_.data() + restarts_offset_) {
+    string_view key;
+    string_view val;
+    if (rc = DecodeRestartsPointKeyAndValueWrap(cur_entry, key, val); rc)
+      return rc;
+    return handle_result(key, val);
+  }
+
   return NOT_FOUND;
 }
-/* 注意传入的是 user_key，需要和磁盘上的 [user_key,seq,op_type] 进行比较 */
-RC BlockReader::Get(string_view key, string &value) {
-  return GetInternal(key, value, cmp_, nullptr);
-}
 
-RC BlockReader::GetGreaterOrEqualTo(string_view key, string &value) {
-  int index;
-  RC rc = GetInternal(
-      key, value,
-      [this](string_view k1, string_view k2) -> int {
-        int cmp = cmp_(k1, k2);
-        if (cmp > 0) return 0;
-        return cmp;
-      },
-      &index);
-  if (rc == NOT_FOUND && index == -1 && !restarts_.empty()) {
-    const char *restart_record = data_.data() + restarts_[0];
-    string_view val;
-    if (rc = DecodeRestartsPointValueWrap(restart_record, val); rc) return rc;
-    value = val;
-  }
-  return rc;
+RC BlockReader::Get(string_view innner_key, string &value) {
+  return GetInternal(
+      innner_key, [&](string_view result_key, string_view result_value) -> RC {
+        return handle_result_fn_(result_key, result_value, innner_key, value);
+      });
 }
 
 RC DecodeRestartsPointKeyAndValue(const char *restart_record,
@@ -169,35 +178,27 @@ RC DecodeRestartsPointKeyAndValue(const char *restart_record,
   return OK;
 }
 
-RC DecodeRestartsPointKey(const char *restart_record, int *shared_key_len,
-                          int *unshared_key_len, int *value_len,
-                          string_view &restarts_key) {
-  string_view unused_restarts_value;
-  return DecodeRestartsPointKeyAndValue(restart_record, shared_key_len,
-                                        unshared_key_len, value_len,
-                                        restarts_key, unused_restarts_value);
+RC DecodeRestartsPointKeyAndValueWrap(const char *restart_record,
+                                      string_view &restarts_key,
+                                      string_view &restarts_value) {
+  int shared_key_len, unshared_key_len, value_len;
+  return DecodeRestartsPointKeyAndValue(restart_record, &shared_key_len,
+                                        &unshared_key_len, &value_len,
+                                        restarts_key, restarts_value);
 }
 
 RC DecodeRestartsPointKeyWrap(const char *restart_record,
                               string_view &restarts_key) {
-  int shared_key_len, unshared_key_len, value_len;
-  return DecodeRestartsPointKey(restart_record, &shared_key_len,
-                                &unshared_key_len, &value_len, restarts_key);
+  string_view unused_restarts_value;
+  return DecodeRestartsPointKeyAndValueWrap(restart_record, restarts_key,
+                                            unused_restarts_value);
 }
 
 RC DecodeRestartsPointValueWrap(const char *restart_record,
                                 string_view &restarts_value) {
   string_view unused_restarts_key;
-  int shared_key_len, unshared_key_len, value_len;
-  return DecodeRestartsPointKeyAndValue(restart_record, &shared_key_len,
-                                        &unshared_key_len, &value_len,
-                                        unused_restarts_key, restarts_value);
-}
-
-/* [user,seq,op] [user] */
-int CmpKeyAndUserKey(string_view key, string_view user_key) {
-  string_view key_user_key = key.substr(0, key.size() - 9);
-  return key_user_key.compare(user_key);
+  return DecodeRestartsPointKeyAndValueWrap(restart_record, unused_restarts_key,
+                                            restarts_value);
 }
 
 RC BlockReader::BsearchRestartPoint(string_view key, int *index) {
@@ -217,7 +218,7 @@ RC BlockReader::BsearchRestartPoint(string_view key, int *index) {
       MLog->error("DecodeRestartsPointKey error: {}", strrc(rc));
       return rc;
     }
-    if (cmp_(restarts_key, key) < 0) {
+    if (cmp_fn_(restarts_key, key) < 0) {
       left = mid + 1;
     } else {
       right = mid - 1;
@@ -232,7 +233,7 @@ RC BlockReader::BsearchRestartPoint(string_view key, int *index) {
       MLog->error("DecodeRestartsPointKey error: {}", strrc(rc));
       return rc;
     }
-    if (!cmp_(restarts_key, key)) {
+    if (!cmp_fn_(restarts_key, key)) {
       *index = left;
       return OK;
     }

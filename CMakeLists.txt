@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(adlsm-tree)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS_DEBUG "-std=c++2a -g -fno-omit-frame-pointer -fsanitize=address")
+set(CMAKE_CXX_FLAGS_DEBUG "-std=c++2a -g -fno-omit-frame-pointer")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++2a -O2")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -41,6 +41,7 @@ add_executable(db_test
                src/footer_block.cpp
                src/murmur3_hash.cpp
                src/db.cpp
+               src/keys.cpp
                src/encode.cpp
                src/back_ground_worker.cpp
                src/monitor_logger.cpp
@@ -57,13 +58,19 @@ add_executable(block_test
                src/filter_block.cpp
                src/footer_block.cpp
                src/sstable.cpp
+               src/keys.cpp
                src/file_util.cpp
                test/block_test.cpp)
 target_link_libraries(block_test crypto gtest gtest_main pthread fmt spdlog)
 
 # 过滤器块测试
-add_executable(filter_block_test src/encode.cpp src/filter_block.cpp src/murmur3_hash.cpp test/filter_block_test.cpp)
-target_link_libraries(filter_block_test crypto gtest gtest_main)
+add_executable(filter_block_test
+               src/monitor_logger.cpp
+               src/encode.cpp
+               src/filter_block.cpp
+               src/murmur3_hash.cpp
+               test/filter_block_test.cpp)
+target_link_libraries(filter_block_test crypto gtest gtest_main pthread fmt spdlog)
 
 # sstable 测试
 add_executable(sstable_test
@@ -71,11 +78,11 @@ add_executable(sstable_test
                src/mem_table.cpp
                src/sstable.cpp
                src/file_util.cpp
-               src/block.cpp
                src/filter_block.cpp
                src/footer_block.cpp
                src/murmur3_hash.cpp
                src/encode.cpp
+               src/keys.cpp
                src/back_ground_worker.cpp
                src/monitor_logger.cpp
                test/sstable_test.cpp)

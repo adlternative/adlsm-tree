@@ -60,17 +60,10 @@ class SSTableWriter {
 
 string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]);
 
-// class SSTable {
-//  public:
-//   SSTable(MmapReadAbleFile *file);
-
-//  private:
-//   MmapReadAbleFile *file_;
-// };
-
 class SSTableReader {
  public:
   static RC Open(MmapReadAbleFile *file, SSTableReader **table);
+  RC Get(string_view key, string &value);
 
   SSTableReader(MmapReadAbleFile *file);
 

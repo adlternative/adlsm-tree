@@ -1,7 +1,10 @@
 #include "../src/block.hpp"
 #include <gtest/gtest.h>
+#include "../src/keys.hpp"
 #include "../src/mem_table.hpp"
 #include "../src/options.hpp"
+
+using namespace std;
 
 void AppendKV2Expect(std::string &expect, int shared_key_len,
                      int unshared_key_len, int value_len,
@@ -114,10 +117,6 @@ TEST(block_test, Add4) {
   EXPECT_EQ(result, result2);
 }
 
-int easy_cmp(std::string_view key1, std::string_view key2) {
-  return key1.compare(key2);
-}
-
 TEST(block_test, Get1) {
   using namespace adl;
   BlockWriter block;
@@ -131,7 +130,7 @@ TEST(block_test, Get1) {
   string value;
   RC rc;
 
-  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
+  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
   rc = block_reader.Get("key0", value);
   ASSERT_EQ(rc, OK) << strrc(rc);
   EXPECT_EQ(value, "v0");
@@ -162,7 +161,7 @@ TEST(block_test, Get2) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
+  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
 
   for (int i = 0; i < 20; i++) {
     string key("key");
@@ -195,7 +194,7 @@ TEST(block_test, Get3) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
+  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
 
   for (int i = 0; i < 2000; i++) {
     string key("key");
@@ -234,15 +233,18 @@ TEST(block_test, Get4) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(block_reader.Init(result, CmpKeyAndUserKey), OK);
+  ASSERT_EQ(
+      block_reader.Init(result, CmpInnerKey, SaveResultValueIfUserKeyMatch),
+      OK);
 
   for (int i = 0; i < 2000; i++) {
     string key("key");
     key += std::to_string(i);
+    auto inner_key = NewMinInnerKey(key);
     string value;
     string expect("value");
     expect += std::to_string(i);
-    rc = block_reader.Get(key, value);
+    rc = block_reader.Get(inner_key, value);
     ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
     EXPECT_EQ(value, expect);
   }
@@ -250,54 +252,30 @@ TEST(block_test, Get4) {
   for (int i = 0; i < 2000; i++) {
     string key("key");
     key += std::to_string(2000 + i);
+    auto inner_key = NewMinInnerKey(key);
     string value;
-    rc = block_reader.Get(key, value);
+    rc = block_reader.Get(inner_key, value);
     ASSERT_EQ(rc, NOT_FOUND) << "batch " << i << ": " << strrc(rc);
   }
 
   for (int i = 0; i < 2000; i++) {
     string key("key");
     key += std::to_string(-1 - i);
+    auto inner_key = NewMinInnerKey(key);
     string value;
-    rc = block_reader.Get(key, value);
+    rc = block_reader.Get(inner_key, value);
     ASSERT_EQ(rc, NOT_FOUND) << "batch " << i << ": " << strrc(rc);
   }
 
   for (int i = 2000 - 1; i >= 0; --i) {
     string key("key");
     key += std::to_string(i);
+    auto inner_key = NewMinInnerKey(key);
     string value;
     string expect("value");
     expect += std::to_string(i);
-    rc = block_reader.Get(key, value);
+    rc = block_reader.Get(inner_key, value);
     ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
     EXPECT_EQ(value, expect);
   }
-}
-
-TEST(block_test, GetGreaterOrEqualTo) {
-  using namespace adl;
-  BlockWriter block;
-  BlockReader block_reader;
-  block.Add("key1", "v1");
-  block.Add("key3", "v3");
-  block.Add("key5", "v5");
-  string result;
-  block.Final(result);
-  block.Reset();
-  string value;
-  RC rc;
-
-  ASSERT_EQ(block_reader.Init(result, easy_cmp), OK);
-  rc = block_reader.GetGreaterOrEqualTo("key0", value);
-  ASSERT_EQ(rc, OK) << strrc(rc);
-  EXPECT_EQ(value, "v1");
-  rc = block_reader.GetGreaterOrEqualTo("key2", value);
-  ASSERT_EQ(rc, OK) << strrc(rc);
-  EXPECT_EQ(value, "v3");
-  rc = block_reader.GetGreaterOrEqualTo("key4", value);
-  ASSERT_EQ(rc, OK) << strrc(rc);
-  EXPECT_EQ(value, "v5");
-  rc = block_reader.GetGreaterOrEqualTo("key6", value);
-  ASSERT_EQ(rc, NOT_FOUND) << strrc(rc);
 }

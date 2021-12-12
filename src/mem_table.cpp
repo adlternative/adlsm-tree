@@ -17,7 +17,7 @@ RC MemTable::Put(const MemKey &key, string_view value) {
 }
 
 RC MemTable::Get(string_view key, string &value) {
-  auto min_key = MemKey::NewMinKey(key);
+  auto min_key = MemKey::NewMinMemKey(key);
 
   auto iter = table_.lower_bound(min_key);
   if (iter == table_.end()) {

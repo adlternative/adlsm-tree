@@ -5,7 +5,9 @@
 #include "block.hpp"
 #include "db.hpp"
 #include "file_util.hpp"
+#include "keys.hpp"
 #include "monitor_logger.hpp"
+#include "rc.hpp"
 
 namespace adl {
 
@@ -26,13 +28,14 @@ SSTableWriter::SSTableWriter(string_view dbname, WritAbleFile *file,
   SHA256_Init(&sha256_);
 }
 
-RC SSTableWriter::Add(string_view key, string_view value) {
-  /* add K to filter block */
-  filter_block_.Update(key);
+/* inner_key -> "[user_key, seq, op]" */
+RC SSTableWriter::Add(string_view inner_key, string_view value) {
+  /* add K.user_key to filter block */
+  filter_block_.Update(InnerKeyToUserKey(inner_key));
   /* add <K,V> to data block */
-  auto rc = data_block_.Add(key, value);
+  auto rc = data_block_.Add(inner_key, value);
   if (rc) return rc;
-  last_key_ = key;
+  last_key_ = inner_key;
   if (data_block_.EstimatedSize() > need_flush_size_) FlushDataBlock();
   return OK;
 }
@@ -102,8 +105,8 @@ RC SSTableReader::ReadFooterBlock() {
                        FooterBlockWriter::footer_size, footer_block_buffer);
       rc) {
     MLog->error("Read file error: off:{} size:{}",
-                   file_size_ - FooterBlockWriter::footer_size,
-                   FooterBlockWriter::footer_size);
+                file_size_ - FooterBlockWriter::footer_size,
+                FooterBlockWriter::footer_size);
     return rc;
   }
   if (rc = foot_block_reader_.Init(footer_block_buffer); rc) {
@@ -118,18 +121,18 @@ RC SSTableReader::ReadIndexBlock() {
   string_view index_block_buffer;
   auto index_block_handle = foot_block_reader_.index_block_handle();
   MLog->info("Index Block Handle: off:{} size:{}",
-                index_block_handle.block_offset_,
-                index_block_handle.block_size_);
+             index_block_handle.block_offset_, index_block_handle.block_size_);
 
   if (rc = file_->Read(index_block_handle.block_offset_,
                        index_block_handle.block_size_, index_block_buffer);
       rc) {
     MLog->error("Read index block buffer error: off:{} size:{}",
-                   index_block_handle.block_offset_,
-                   index_block_handle.block_size_);
+                index_block_handle.block_offset_,
+                index_block_handle.block_size_);
     return rc;
   }
-  if (rc = index_block_reader_.Init(index_block_buffer, CmpKeyAndUserKey); rc) {
+  if (rc = index_block_reader_.Init(index_block_buffer, CmpInnerKey, EasySave);
+      rc) {
     MLog->error("Init index block error: {}", strrc(rc));
     return rc;
   }
@@ -141,17 +144,16 @@ RC SSTableReader::ReadMetaBlock() {
   string_view meta_block_buffer;
   auto meta_block_handle = foot_block_reader_.meta_block_handle();
   MLog->info("Meta Block Handle: off:{} size:{}",
-                meta_block_handle.block_offset_, meta_block_handle.block_size_);
+             meta_block_handle.block_offset_, meta_block_handle.block_size_);
 
   if (rc = file_->Read(meta_block_handle.block_offset_,
                        meta_block_handle.block_size_, meta_block_buffer);
       rc) {
     MLog->error("Read meta block buffer error: off:{} size:{}",
-                   meta_block_handle.block_offset_,
-                   meta_block_handle.block_size_);
+                meta_block_handle.block_offset_, meta_block_handle.block_size_);
     return rc;
   }
-  if (rc = meta_block_reader_.Init(meta_block_buffer, CmpKeyAndUserKey); rc) {
+  if (rc = meta_block_reader_.Init(meta_block_buffer, EasyCmp, EasySave); rc) {
     MLog->error("Init meta block error: {}", strrc(rc));
     return rc;
   }
@@ -175,8 +177,8 @@ RC SSTableReader::ReadFilterBlock() {
                        filter_block_handle.block_size_, filter_block_buffer);
       rc) {
     MLog->error("Read filter block buffer error: off:{} size:{}",
-                   filter_block_handle.block_offset_,
-                   filter_block_handle.block_size_);
+                filter_block_handle.block_offset_,
+                filter_block_handle.block_size_);
     return rc;
   }
 
@@ -192,17 +194,67 @@ RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table) {
   RC rc;
   /* read footer */
   if (rc = t->ReadFooterBlock(); rc) return rc;
+  MLog->info("Read footer block ok");
   /* read index */
   if (rc = t->ReadIndexBlock(); rc) return rc;
+  MLog->info("Read index block ok");
   /* read meta */
   if (rc = t->ReadMetaBlock(); rc) return rc;
+  MLog->info("Read meta block ok");
   /* read filter */
   if (rc = t->ReadFilterBlock(); rc) return rc;
+  MLog->info("Read filter block ok");
   /* no read data! */
   *table = t;
   return OK;
 }
 
+RC SSTableReader::Get(string_view inner_key, string &value) {
+  RC rc;
+  // MLog->trace("SSTableReader want Get key {}", key);
+
+  /* 布隆过滤器过滤 */
+  if (!filter_block_reader_.IsKeyExists(0, InnerKeyToUserKey(inner_key))) {
+    // MLog->error("filter_block_reader_ think key {} is not exists!", key);
+    return NOT_FOUND;
+  }
+
+  /* index 搜索 高键 */
+  string data_block_handle_data;
+
+  if (auto rc = index_block_reader_.Get(inner_key, data_block_handle_data);
+      rc) {
+    MLog->info("the key {} out range of this table",
+               InnerKeyToUserKey(inner_key));
+    return rc;
+  }
+
+  BlockHandle data_block_handle;
+
+  data_block_handle.DecodeFrom(data_block_handle_data);
+  MLog->info("Data Block Handle: off:{} size:{}",
+             data_block_handle.block_offset_, data_block_handle.block_size_);
+  string_view data_block_buffer;
+  if (rc = file_->Read(data_block_handle.block_offset_,
+                       data_block_handle.block_size_, data_block_buffer);
+      rc) {
+    MLog->error("Read data block buffer error: off:{} size:{}",
+                data_block_handle.block_offset_, data_block_handle.block_size_);
+    return rc;
+  }
+
+  BlockReader data_block_reader;
+
+  if (rc = data_block_reader.Init(data_block_buffer, CmpInnerKey,
+                                  SaveResultValueIfUserKeyMatch);
+      rc) {
+    MLog->error("data_block_reader Init error: {}", strrc(rc));
+    return rc;
+  }
+  return data_block_reader.Get(inner_key, value);
+}
+
 SSTableReader::SSTableReader(MmapReadAbleFile *file)
     : file_(file), file_size_(file_->Size()) {}
+
 }  // namespace adl

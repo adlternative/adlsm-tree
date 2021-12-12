@@ -37,6 +37,11 @@
 
 注意这里的 `OFFSET` 是针对该 `FILTER BLOCK` 的，而不是整个文件。
 
+`leveldb` 中是每一个 `DATA BLOCK` 配一个 `FILTER BLOCK`，
+本项目的策略是一个 `SSTABLE` 配一个 `FILTER BLOCK`，这样，布隆过滤器检查的工作流程就大大简化了。
+
+而 `rocksdb` 中则是为所有 `SSTABLE` 配一个 `FILTER BLOCK`。
+
 | Filter Format |
 | ------------- |
 | `<bitmap>`    |

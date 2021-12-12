@@ -31,7 +31,7 @@ struct DBOptions {
 
   /* LOG */
   const char *log_pattern = "[%Y-%m-%d %H:%M:%S.%e] [%l] [%n] %v";
-  spdlog::level::level_enum log_level = spdlog::level::info;
+  spdlog::level::level_enum log_level = spdlog::level::trace;
   const char *logger_name = "monitor_logger";
   const char *log_file_name = "monitor.log";
 };
