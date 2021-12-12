@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(adlsm-tree)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS_DEBUG "-std=c++2a -g -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_DEBUG "-std=c++2a -g -fno-omit-frame-pointer -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++2a -O2")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

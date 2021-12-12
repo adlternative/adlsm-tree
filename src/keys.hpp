@@ -22,7 +22,6 @@ struct MemKey {
   /* 理想中 memtable 应当不会有相同的元素 比如 [key1,3] [key1,3]  */
   bool operator<(const MemKey &other) const;
   string ToKey() const;
-
   void FromKey(string_view key);
 
   /* user_key 绑定最大序列号作为查询的依据 */
@@ -32,6 +31,9 @@ struct MemKey {
 };
 
 string_view InnerKeyToUserKey(string_view inner_key);
+int64_t InnerKeySeq(string_view inner_key);
+OpType InnerKeyOpType(string_view inner_key);
+
 int CmpInnerKey(string_view k1, string_view k2);
 int CmpKeyAndUserKey(string_view key, string_view user_key);
 RC SaveResultValueIfUserKeyMatch(string_view rk, string_view rv, string_view tk,

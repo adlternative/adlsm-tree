@@ -23,18 +23,38 @@ int CmpKeyAndUserKey(string_view key, string_view user_key) {
 RC SaveResultValueIfUserKeyMatch(string_view rk, string_view rv, string_view tk,
                                  string &dv) {
   if (InnerKeyToUserKey(rk).compare(InnerKeyToUserKey(tk))) return NOT_FOUND;
+  if (InnerKeyOpType(rk) == OP_DELETE) return NOT_FOUND;
   dv.assign(rv.data(), rv.length());
   return OK;
 }
 
-MemKey::MemKey(string_view str, int64_t seq, enum OpType op_type)
+MemKey::MemKey(string_view str, int64_t seq, OpType op_type)
     : user_key_(str), seq_(seq), op_type_(op_type) {}
-bool MemKey::operator<(const MemKey &other) const {
-  if (user_key_ == other.user_key_) {
-    return seq_ > other.seq_;
-  }
-  return user_key_ < other.user_key_;
+
+int64_t InnerKeySeq(string_view inner_key) {
+  int64_t seq;
+  memcpy(&seq, &inner_key[inner_key.length() - 9], 8);
+  return seq;
 }
+
+OpType InnerKeyOpType(string_view inner_key) {
+  OpType op_type = (OpType)inner_key[inner_key.length() - 1];
+  return op_type;
+}
+
+bool MemKey::operator<(const MemKey &other) const {
+  if (user_key_ < other.user_key_)
+    return true;
+  else if (user_key_ == other.user_key_) {
+    if (seq_ > other.seq_)
+      return true;
+    else if (seq_ == other.seq_) {
+      if (op_type_ > other.op_type_) return true;
+    }
+  }
+  return false;
+}
+
 std::string MemKey::ToKey() const {
   string ret(user_key_);
   char temp[8];

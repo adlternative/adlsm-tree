@@ -8,21 +8,75 @@ void BuildSSTable(string_view dbname, string &sstable_path) {
   using namespace adl;
   DBOptions opts;
   MemTable table(opts);
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 10000; i++) {
     string key = "key" + to_string(i);
     string val = "value" + to_string(i);
     MemKey key1(key, i, OP_PUT);
     ASSERT_EQ(table.Put(key1, val), OK) << "put error";
   }
-  for (int i = 0; i < 100; i++) {
-    string key = "key" + to_string(i);
-    string val;
-    ASSERT_EQ(table.Get(key, val), OK) << "get error";
-    ASSERT_EQ(val, "value" + to_string(i));
-  }
   if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
   ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
 
+  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+}
+
+void BuildSSTable2(string_view dbname, string &sstable_path) {
+  using namespace adl;
+  DBOptions opts;
+  MemTable table(opts);
+  int seq_count = 0;
+
+  for (int i = 0; i < 10000; i++) {
+    string key = "key" + to_string(i / 2);
+    string val = "value" + to_string(i / 2);
+    MemKey key1(key, seq_count++, !(i % 2) ? OP_PUT : OP_DELETE);
+    ASSERT_EQ(table.Put(key1, val), OK) << "put error";
+  }
+  if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
+  ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
+  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+}
+
+void BuildSSTable3(string_view dbname, string &sstable_path) {
+  using namespace adl;
+  DBOptions opts;
+  MemTable table(opts);
+  int seq_count = 0;
+
+  for (int i = 0; i < 10000; i++) {
+    string key = "key" + to_string(i / 2);
+    string val = "value" + to_string(i / 2);
+    MemKey key1(key, seq_count++, !(i % 2) ? OP_PUT : OP_DELETE);
+    ASSERT_EQ(table.Put(key1, val), OK) << "put error";
+  }
+
+  for (int i = 0; i < 10000; i++) {
+    string key = "key" + to_string(i / 2);
+    string val = "value" + to_string(i);
+    MemKey key1(key, seq_count++, OP_PUT);
+    ASSERT_EQ(table.Put(key1, val), OK) << "put error";
+  }
+
+  if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
+  ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
+  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+}
+
+void BuildSSTable4(string_view dbname, string &sstable_path) {
+  using namespace adl;
+  DBOptions opts;
+  MemTable table(opts);
+  int seq_count = 0;
+
+  for (int i = 0; i <= 10000; i++) {
+    string key = "key";
+    string val = "value" + to_string(i / 2);
+    MemKey key1(key, seq_count++, !(i % 2) ? OP_PUT : OP_DELETE);
+    ASSERT_EQ(table.Put(key1, val), OK) << "put error";
+  }
+
+  if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
+  ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
   ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
 }
 
@@ -38,22 +92,111 @@ TEST(sstable, sstable_reader) {
   SSTableReader *sstable;
   MmapReadAbleFile *file;
 
-  BuildSSTable("/tmp/feiwudb2", sstable_path);
+  BuildSSTable(dbname, sstable_path);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 10000; i++) {
     string key = "key" + to_string(i);
     string val;
     string inner_key = NewMinInnerKey(key);
     auto rc = sstable->Get(inner_key, val);
-    std::cout << "k " << key << "v " << val << std::endl;
     EXPECT_EQ(rc, OK) << "Get " << key << " error";
+    if (rc == OK) {
+      std::cout << "KEY " << key << "VAL " << val << std::endl;
+      EXPECT_EQ(val, "value" + to_string(i));
+    }
+  }
+  for (int i = 1; i < 10000; i++) {
+    string key = "key" + to_string(10000 + i);
+    string val;
+    string inner_key = NewMinInnerKey(key);
+    auto rc = sstable->Get(inner_key, val);
+    EXPECT_EQ(rc, NOT_FOUND)
+        << "Get error: KEY " << key << "VAL " << val << " should not be found";
     if (rc == OK) {
       EXPECT_EQ(val, "value" + to_string(i));
     }
   }
+
+  delete file;
+  delete sstable;
+}
+
+TEST(sstable, sstable_reader2) {
+  using namespace adl;
+  auto dbname = "/tmp/feiwudb2";
+  string sstable_path;
+  SSTableReader *sstable;
+  MmapReadAbleFile *file;
+
+  BuildSSTable2(dbname, sstable_path);
+  auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  rc = SSTableReader::Open(file, &sstable);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  for (int i = 1; i < 10000 / 2; i++) {
+    string key = "key" + to_string(i);
+    string val;
+    string inner_key = NewMinInnerKey(key);
+    auto rc = sstable->Get(inner_key, val);
+    EXPECT_EQ(rc, NOT_FOUND)
+        << "Get error: KEY " << key << "VAL " << val << " should not be found";
+    if (rc == OK)
+      EXPECT_EQ(val, "value" + to_string(i));
+    else if (rc == NOT_FOUND) {
+      std::cout << key << " NOT_FOUND" << std::endl;
+    }
+  }
+
+  delete file;
+  delete sstable;
+}
+
+TEST(sstable, sstable_reader3) {
+  using namespace adl;
+  auto dbname = "/tmp/feiwudb2";
+  string sstable_path;
+  SSTableReader *sstable;
+  MmapReadAbleFile *file;
+
+  BuildSSTable3(dbname, sstable_path);
+  auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  rc = SSTableReader::Open(file, &sstable);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  for (int i = 0; i < 10000 / 2; i++) {
+    string key = "key" + to_string(i);
+    string val;
+    string inner_key = NewMinInnerKey(key);
+    auto rc = sstable->Get(inner_key, val);
+    EXPECT_EQ(rc, OK) << "Get " << key << " error";
+    if (rc == OK) EXPECT_EQ(val, "value" + to_string(i * 2 + 1));
+  }
+
+  delete file;
+  delete sstable;
+}
+
+TEST(sstable, sstable_reader4) {
+  using namespace adl;
+  auto dbname = "/tmp/feiwudb2";
+  string sstable_path;
+  SSTableReader *sstable;
+  MmapReadAbleFile *file;
+
+  BuildSSTable4(dbname, sstable_path);
+  auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  rc = SSTableReader::Open(file, &sstable);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  string key = "key";
+  string val;
+  string inner_key = NewMinInnerKey(key);
+  rc = sstable->Get(inner_key, val);
+  EXPECT_EQ(rc, OK) << "Get " << key << " error";
+  if (rc == OK) EXPECT_EQ(val, "value5000");
   delete file;
   delete sstable;
 }
