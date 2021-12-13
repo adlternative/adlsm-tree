@@ -4,6 +4,7 @@
 #include <string.h>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <string>
 #include "keys.hpp"
 #include "rc.hpp"
@@ -11,8 +12,6 @@
 namespace adl {
 
 using namespace std;
-
-
 
 struct DBOptions;
 class MemTable {
@@ -31,15 +30,16 @@ class MemTable {
   MemTable(const DBOptions &options);
   RC Put(const MemKey &key, string_view value);
   RC Get(string_view key, string &value);
-  RC ForEach(std::function<RC(const MemKey &key, string_view value)> func);
+  RC GetNoLock(string_view key, string &value);
+  RC ForEachNoLock(
+      std::function<RC(const MemKey &key, string_view value)> &&func);
   RC BuildSSTable(string_view dbname, string &sstable_path);
   size_t GetMemTableSize();
 
  private:
-  /* mutable mutex mu_;  */
+  mutable mutex mu_;
   const DBOptions *options_;
   map<MemKey, string> table_;
-
   Stat stat_; /* 整个内存表的状态 */
 };
 

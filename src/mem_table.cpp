@@ -1,5 +1,6 @@
 #include "mem_table.hpp"
 #include <string.h>
+#include <mutex>
 #include "file_util.hpp"
 #include "monitor_logger.hpp"
 #include "sstable.hpp"
@@ -7,6 +8,7 @@
 namespace adl {
 
 RC MemTable::Put(const MemKey &key, string_view value) {
+  lock_guard<mutex> lock(mu_);
   if (key.op_type_ == OP_PUT)
     table_[key] = value;
   else if (key.op_type_ == OP_DELETE)
@@ -17,22 +19,25 @@ RC MemTable::Put(const MemKey &key, string_view value) {
 }
 
 RC MemTable::Get(string_view key, string &value) {
+  lock_guard<mutex> lock(mu_);
+  return GetNoLock(key, value);
+}
+
+RC MemTable::GetNoLock(string_view key, string &value) {
   auto min_key = MemKey::NewMinMemKey(key);
 
   auto iter = table_.lower_bound(min_key);
-  if (iter == table_.end()) {
-    return NOT_FOUND;
-  }
+  if (iter == table_.end()) return NOT_FOUND;
 
   if (key == iter->first.user_key_ &&
       iter->first.op_type_ != OpType::OP_DELETE) {
     value = iter->second;
     return OK;
-  } else {
-    return NOT_FOUND;
   }
+  return NOT_FOUND;
 }
 
+/* 一般是 IMEMTABLE 进行 BUILD 不需要加锁 */
 RC MemTable::BuildSSTable(string_view dbname, string &sstable_path) {
   MLog->info("memtable -> sstable");
   string true_path = FileManager::FixDirName(dbname);
@@ -44,7 +49,7 @@ RC MemTable::BuildSSTable(string_view dbname, string &sstable_path) {
   if (rc) return rc;
   auto sstable = new SSTableWriter(dbname, temp_file, *options_);
 
-  if (rc = ForEach([&](const MemKey &memkey, string_view value) -> RC {
+  if (rc = ForEachNoLock([&](const MemKey &memkey, string_view value) -> RC {
         string key = memkey.ToKey();
         return sstable->Add(key, value);
       });
@@ -64,8 +69,9 @@ RC MemTable::BuildSSTable(string_view dbname, string &sstable_path) {
   return OK;
 }
 
-RC MemTable::ForEach(
-    std::function<RC(const MemKey &key, string_view value)> func) {
+/* 暂时用不加锁版本 */
+RC MemTable::ForEachNoLock(
+    std::function<RC(const MemKey &key, string_view value)> &&func) {
   for (auto iter = table_.begin(); iter != table_.end(); iter++) {
     const MemKey &memkey = iter->first;
     string_view value = iter->second;
@@ -77,6 +83,9 @@ RC MemTable::ForEach(
 
 MemTable::MemTable(const DBOptions &options) : options_(&options) {}
 
-size_t MemTable::GetMemTableSize() { return stat_.Sum(); }
+size_t MemTable::GetMemTableSize() {
+  lock_guard<mutex> lock(mu_);
+  return stat_.Sum();
+}
 
 }  // namespace adl

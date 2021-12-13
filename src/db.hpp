@@ -41,8 +41,8 @@ class DB {
   bool NeedFreezeMemTable();
 
   /* memory */
-  MemTable *mem_;
-  MemTable *imem_;
+  shared_ptr<MemTable> mem_;
+  shared_ptr<MemTable> imem_;
 
   /* state */
   std::atomic<bool> closed_;

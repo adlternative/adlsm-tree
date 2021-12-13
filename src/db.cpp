@@ -1,7 +1,10 @@
 #include "db.hpp"
+#include <cstdint>
 #include <mutex>
 #include "file_util.hpp"
+#include "mem_table.hpp"
 #include "monitor_logger.hpp"
+#include "rc.hpp"
 
 namespace adl {
 
@@ -9,7 +12,7 @@ DB::DB(string_view dbname, DBOptions &options)
     : dbname_(dbname),
       sequence_id_(0),
       options_(&options),
-      mem_(new MemTable(options)),
+      mem_(make_shared<MemTable>(options)),
       imem_(nullptr),
       closed_(false),
       is_compacting_(false) {
@@ -27,8 +30,6 @@ DB::~DB() {
     worker->Stop();
     delete worker;
   }
-  if (mem_) delete mem_;
-  if (imem_) delete imem_;
   MLog->info("DB closed");
   spdlog::drop(options_->logger_name);
 }
@@ -87,15 +88,30 @@ RC DB::Delete(string_view key) {
 }
 
 RC DB::Get(string_view key, std::string &value) {
-  if (auto rc = mem_->Get(key, value); rc) {
-    MLog->error("Get {} from memtable failed", key);
-    return rc;
+  RC rc;
+  unique_lock<mutex> lock(mutex_);
+  auto mem = mem_;
+  auto imem = imem_;
+  // int64_t sequence_id_ = INT64_MAX;
+  lock.unlock();
+  /* 1. memtable */
+  rc = mem->Get(key, value);
+  if (!rc) return rc;
+  /* 2. imemtable */
+  if (imem) {
+    rc = imem->GetNoLock(key, value);
+    if (!rc) return rc;
   }
-  return OK;
+  /* 3 L0 sstable | L1-LN sstable 需要依赖于版本控制 元数据管理 */
+  /* 4. 读是否需要更新元数据？ */
+  return NOT_FOUND;
 }
 
+/* 目前写入的并发策略是整个 Write Db锁，因为想要保护 memtable
+ * 否则一个写入线程修改 mem = new MemTable 这个线程不加锁读取 mem
+ * 是有问题的。 */
 RC DB::Write(string_view key, string_view value, OpType op) {
-  lock_guard<mutex> lock(mutex_);
+  unique_lock<mutex> lock(mutex_);
   /* check if need freeze mem or compaction 这可能需要好一会儿 */
   if (auto rc = CheckMemAndCompaction(); rc) {
     MLog->error("DB CheckMemAndCompaction failed: {}", strrc(rc));
@@ -107,6 +123,7 @@ RC DB::Write(string_view key, string_view value, OpType op) {
   return mem_->Put(mem_key, value);
 }
 
+/* 由于读 imem_ 需要锁定 */
 RC DB::CheckMemAndCompaction() {
   /* 表示已经锁 */
   unique_lock<mutex> lock(mutex_, adopt_lock);
@@ -117,7 +134,7 @@ RC DB::CheckMemAndCompaction() {
     /* memtable 满了，如果 imem 非空 等待
     minor compaction 将 imem 置为空 */
     MLog->info("DB wait until imem empty");
-    while (imem_ != nullptr) background_work_done_cond_.wait(lock);
+    while (imem_) background_work_done_cond_.wait(lock);
     MLog->info("DB wait imem empty ok");
     /* mem -> imem */
     FreezeMemTable();
@@ -132,12 +149,13 @@ RC DB::CheckMemAndCompaction() {
 }
 
 /* background thread do compaction */
+/* 由于读 imem_ 需要锁定 */
 RC DB::DoCompaction() {
   RC rc;
   lock_guard<mutex> lock(mutex_);
   is_compacting_ = true;
 
-  if (imem_ != nullptr) {
+  if (imem_) {
     /* minor compaction */
     rc = DoMinorCompaction();
   } else {
@@ -159,15 +177,14 @@ RC DB::DoCompaction() {
   return rc;
 }
 
+/* 由于写 imem_ 需要锁定 */
 RC DB::DoMinorCompaction() {
   MLog->info("DB is doing minor compaction");
   if (auto rc = BuildSSTable(); rc) {
     MLog->error("DB build sstable failed: {}", strrc(rc));
     return rc;
   }
-  /* 等会改成智能指针 */
-  delete imem_;
-  imem_ = nullptr;
+  imem_.reset();
   return OK;
 }
 
@@ -181,12 +198,14 @@ RC DB::BuildSSTable() {
 }
 
 /* mem -> imem */
+/* 由于写 imem 和 mem 需要锁定 */
 void DB::FreezeMemTable() {
   MLog->info("DB mem -> imem");
   imem_ = mem_;
-  mem_ = new MemTable(*options_);
+  mem_ = make_shared<MemTable>(*options_);
 }
 
+/* 读 imem_ 需要锁定 */
 bool DB::NeedCompactions() {
   if (closed_) return false;
   if (imem_) return true;
@@ -195,6 +214,7 @@ bool DB::NeedCompactions() {
   return false;
 }
 
+/* 读 mem 需要锁定 */
 bool DB::NeedFreezeMemTable() {
   return !closed_ && mem_->GetMemTableSize() > options_->mem_table_max_size;
 }

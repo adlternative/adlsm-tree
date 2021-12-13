@@ -224,7 +224,7 @@ TEST(block_test, Get4) {
     MemKey mem_key(key, i, OP_PUT);
     mem_table.Put(mem_key, value);
   }
-  rc = mem_table.ForEach([&](const MemKey &memkey, string_view value) -> RC {
+  rc = mem_table.ForEachNoLock([&](const MemKey &memkey, string_view value) -> RC {
     string key = memkey.ToKey();
     return block.Add(key, value);
   });
