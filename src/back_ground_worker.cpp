@@ -4,17 +4,18 @@
 namespace adl {
 
 Worker *Worker::NewBackgroundWorker() {
-  auto worker = new Worker();
-  std::thread t([](Worker *w) { w->Run(); }, worker);
-  t.detach();
+  auto worker = new Worker;
+  worker->thread_ = new std::thread([](Worker *w) { w->Run(); }, worker);
   return worker;
 }
 
+void Worker::Join() { thread_->join(); }
 void Worker::Stop() {
   lock_guard<mutex> lock(work_queue_mutex_);
-  work_queue_cond_.notify_all();
   closed_ = true;
+  work_queue_cond_.notify_all();
 }
+
 void Worker::Add(std::function<void()> &&function) noexcept {
   // fmt::print("Want Add work to queue\n");
   lock_guard<mutex> lock(work_queue_mutex_);
@@ -25,6 +26,7 @@ void Worker::Add(std::function<void()> &&function) noexcept {
 }
 
 void Worker::Run() { return this->operator()(); }
+
 void Worker::operator()() {
   while (!closed_) {
     // fmt::print("Worker want get work_queue_mutex_\n");
@@ -46,4 +48,6 @@ void Worker::operator()() {
 }
 
 Worker::Worker() : closed_(false) {}
+
+Worker::~Worker() { delete thread_; }
 }  // namespace adl

@@ -28,6 +28,7 @@ DB::~DB() {
   if (!closed_) Close();
   for (auto worker : workers_) {
     worker->Stop();
+    worker->Join();
     delete worker;
   }
   MLog->info("DB closed");

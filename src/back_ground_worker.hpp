@@ -14,11 +14,15 @@ class Worker {
   static Worker *NewBackgroundWorker();
 
   Worker();
+  ~Worker();
+  Worker(const Worker &) = delete;
+  Worker &operator=(const Worker &) = delete;
   void Stop();
 
   void Add(std::function<void()> &&function) noexcept;
 
   void Run();
+  void Join();
   void operator()();
 
  private:
@@ -26,6 +30,7 @@ class Worker {
 
   mutex work_queue_mutex_;
   condition_variable work_queue_cond_;
+  std::thread *thread_;
   bool closed_;
 };
 
