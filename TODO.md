@@ -6,6 +6,6 @@
 6. version control [WIP]
 7. write ahead log [WIP]
 8. cache
-9. tcmalloc/jemalloc
+9. tcmalloc/jemalloc [√]
 10. multi-thread [√]
 11. transaction
