@@ -1,5 +1,5 @@
 
-* `<key,value>` 
+* `<key,value>`
 
 * `key` format:
 `|user_key|seq|type|`
@@ -7,16 +7,15 @@
 有利于前缀压缩。
 
 一个  `memtable` 差不多以以下的模式分布：
-```
-| user_key | seq | type         | value |
-| -------- | --- | ------------ | ----- |
-| key1     | 1   | <WriteType>  | val1  |
-| key2     | 3   | <WriteType>  | val3  |
-| key2     | 2   | <WriteType>  | val2  |
-| key3     | 5   | <DeleteType> |       |
-| key3     | 4   | <WriteType>  | val4  |
 
-```
+| user_key | seq | type           | value |
+| -------- | --- | -------------- | ----- |
+| key1     | 1   | `<WriteType>`  | val1  |
+| key2     | 3   | `<WriteType>`  | val3  |
+| key2     | 2   | `<WriteType>`  | val2  |
+| key3     | 5   | `<DeleteType>` |       |
+| key3     | 4   | `<WriteType>`  | val4  |
+
 
 排序规则：`user_key asc`,`seq desc`。
 
