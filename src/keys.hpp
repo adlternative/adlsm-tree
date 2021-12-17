@@ -16,7 +16,7 @@ struct MemKey {
   string user_key_;
   int64_t seq_;  // sequence number
   enum OpType op_type_;
-
+  MemKey() = default;
   MemKey(string_view str, int64_t seq = 0, enum OpType op_type = OP_PUT);
 
   /* 理想中 memtable 应当不会有相同的元素 比如 [key1,3] [key1,3]  */

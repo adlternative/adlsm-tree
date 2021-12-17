@@ -9,26 +9,26 @@ Revisions Format:
 
 | LEVEL | SHA           |
 | ----- | ------------- |
+| 0     | `<level-sha>` |
 | 1     | `<level-sha>` |
 | 2     | `<level-sha>` |
 | 3     | `<level-sha>` |
 | 4     | `<level-sha>` |
-| 5     | `<level-sha>` |
 
 
 Level Format:
 
- | min-key | max-key | SHA             |
- | ------- | ------- | --------------- |
- | adl     | alskdj  | `<sstable-sha>` |
- | basld   | caslkdj | `<sstable-sha>` |
- | esakld  | faslkdj | `<sstable-sha>` |
- | fjaskl  | qeku    | `<sstable-sha>` |
- | ylyly   | zzzz    | `<sstable-sha>` |
+  | min-key len | min-key | max-key len | max-key | SHA             |
+  | ----------- | ------- | ----------- | ------- | --------------- |
+  |             | adl     |             | alskdj  | `<sstable-sha>` |
+  |             | basld   |             | caslkdj | `<sstable-sha>` |
+  |             | esakld  |             | faslkdj | `<sstable-sha>` |
+  |             | fjaskl  |             | qeku    | `<sstable-sha>` |
+  |             | ylyly   |             | zzzz    | `<sstable-sha>` |
 
-第 n 层 `level` 对象文件位于 `dbname/objects/levels/<n>/xxx.lvl`。
-`sstable` 对象文件位于 `dbname/objects/sstables/xxx.sst`。
-`revision` 对象文件位于 `dbname/objects/revisions/xxx.rev`。
+第 n 层 `level` 对象文件位于 `dbname/objects/level/<n>/xxx.lvl`。
+`sstable` 对象文件位于 `dbname/objects/sst/xxx.sst`。
+`revision` 对象文件位于 `dbname/objects/rev/xxx.rev`。
 `CURRENT` 伪引用文件位于 `dbname/CURRENT`。
 
 
@@ -43,7 +43,7 @@ Level Format:
 
 
 * 设计的效果：
-  将易于支持快照和垃圾回收。
+  将易于支持 Snapshot 和 GC 和 BLOB, TXT。
 
 * 缺点：
   写放大和读放大。

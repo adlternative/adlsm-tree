@@ -26,6 +26,8 @@ enum RC {
   STAT_FILE_ERROR,
   MMAP_ERROR,
   OUT_OF_RANGE,
+  BAD_LEVEL,
+  BAD_FILE_META,
 };
 
 inline std::string_view strrc(RC rc) {
@@ -70,6 +72,10 @@ inline std::string_view strrc(RC rc) {
       return "mmap error";
     case OUT_OF_RANGE:
       return "out of range";
+    case BAD_LEVEL:
+      return "bad level";
+    case BAD_FILE_META:
+      return "bad file meta";
     default:
       return "unknown error";
   }

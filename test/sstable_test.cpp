@@ -4,7 +4,7 @@
 #include "../src/mem_table.hpp"
 #include "../src/options.hpp"
 
-void BuildSSTable(string_view dbname, string &sstable_path) {
+void BuildSSTable(string_view dbname, adl::FileMetaData **meta_data_pointer) {
   using namespace adl;
   DBOptions opts;
   MemTable table(opts);
@@ -16,11 +16,12 @@ void BuildSSTable(string_view dbname, string &sstable_path) {
   }
   if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
   ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
+  ASSERT_EQ(FileManager::Create(SstDir(dbname), DIR_), OK);
 
-  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+  ASSERT_EQ(table.BuildSSTable(dbname, meta_data_pointer), OK);
 }
 
-void BuildSSTable2(string_view dbname, string &sstable_path) {
+void BuildSSTable2(string_view dbname, adl::FileMetaData **meta_data_pointer) {
   using namespace adl;
   DBOptions opts;
   MemTable table(opts);
@@ -34,10 +35,11 @@ void BuildSSTable2(string_view dbname, string &sstable_path) {
   }
   if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
   ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
-  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+  ASSERT_EQ(FileManager::Create(SstDir(dbname), DIR_), OK);
+  ASSERT_EQ(table.BuildSSTable(dbname, meta_data_pointer), OK);
 }
 
-void BuildSSTable3(string_view dbname, string &sstable_path) {
+void BuildSSTable3(string_view dbname, adl::FileMetaData **meta_data_pointer) {
   using namespace adl;
   DBOptions opts;
   MemTable table(opts);
@@ -59,10 +61,11 @@ void BuildSSTable3(string_view dbname, string &sstable_path) {
 
   if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
   ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
-  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+  ASSERT_EQ(FileManager::Create(SstDir(dbname), DIR_), OK);
+  ASSERT_EQ(table.BuildSSTable(dbname, meta_data_pointer), OK);
 }
 
-void BuildSSTable4(string_view dbname, string &sstable_path) {
+void BuildSSTable4(string_view dbname, adl::FileMetaData **meta_data_pointer) {
   using namespace adl;
   DBOptions opts;
   MemTable table(opts);
@@ -77,22 +80,25 @@ void BuildSSTable4(string_view dbname, string &sstable_path) {
 
   if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
   ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
-  ASSERT_EQ(table.BuildSSTable(dbname, sstable_path), OK);
+  ASSERT_EQ(FileManager::Create(SstDir(dbname), DIR_), OK);
+  ASSERT_EQ(table.BuildSSTable(dbname, meta_data_pointer), OK);
 }
 
 TEST(sstable, memtable_to_sstable) {
-  string unused;
-  BuildSSTable("/tmp/feiwudb", unused);
+  adl::FileMetaData *unused = nullptr;
+  BuildSSTable("/tmp/feiwudb", &unused);
+  delete unused;
 }
 
 TEST(sstable, sstable_reader) {
   using namespace adl;
   auto dbname = "/tmp/feiwudb2";
-  string sstable_path;
+  adl::FileMetaData *sstable_meta = nullptr;
   SSTableReader *sstable;
   MmapReadAbleFile *file;
 
-  BuildSSTable(dbname, sstable_path);
+  BuildSSTable(dbname, &sstable_meta);
+  string sstable_path = sstable_meta->sstable_path;
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
@@ -119,7 +125,7 @@ TEST(sstable, sstable_reader) {
       EXPECT_EQ(val, "value" + to_string(i));
     }
   }
-
+  delete sstable_meta;
   delete file;
   delete sstable;
 }
@@ -127,11 +133,12 @@ TEST(sstable, sstable_reader) {
 TEST(sstable, sstable_reader2) {
   using namespace adl;
   auto dbname = "/tmp/feiwudb2";
-  string sstable_path;
+  adl::FileMetaData *sstable_meta = nullptr;
   SSTableReader *sstable;
   MmapReadAbleFile *file;
 
-  BuildSSTable2(dbname, sstable_path);
+  BuildSSTable2(dbname, &sstable_meta);
+  string sstable_path = sstable_meta->sstable_path;
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
@@ -150,6 +157,7 @@ TEST(sstable, sstable_reader2) {
     }
   }
 
+  delete sstable_meta;
   delete file;
   delete sstable;
 }
@@ -157,11 +165,12 @@ TEST(sstable, sstable_reader2) {
 TEST(sstable, sstable_reader3) {
   using namespace adl;
   auto dbname = "/tmp/feiwudb2";
-  string sstable_path;
+  adl::FileMetaData *sstable_meta = nullptr;
   SSTableReader *sstable;
   MmapReadAbleFile *file;
 
-  BuildSSTable3(dbname, sstable_path);
+  BuildSSTable3(dbname, &sstable_meta);
+  string sstable_path = sstable_meta->sstable_path;
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
@@ -175,6 +184,7 @@ TEST(sstable, sstable_reader3) {
     if (rc == OK) EXPECT_EQ(val, "value" + to_string(i * 2 + 1));
   }
 
+  delete sstable_meta;
   delete file;
   delete sstable;
 }
@@ -182,11 +192,12 @@ TEST(sstable, sstable_reader3) {
 TEST(sstable, sstable_reader4) {
   using namespace adl;
   auto dbname = "/tmp/feiwudb2";
-  string sstable_path;
+  adl::FileMetaData *sstable_meta = nullptr;
   SSTableReader *sstable;
   MmapReadAbleFile *file;
 
-  BuildSSTable4(dbname, sstable_path);
+  BuildSSTable4(dbname, &sstable_meta);
+  string sstable_path = sstable_meta->sstable_path;
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
@@ -197,6 +208,8 @@ TEST(sstable, sstable_reader4) {
   rc = sstable->Get(inner_key, val);
   EXPECT_EQ(rc, OK) << "Get " << key << " error";
   if (rc == OK) EXPECT_EQ(val, "value5000");
+
+  delete sstable_meta;
   delete file;
   delete sstable;
 }

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include "keys.hpp"
@@ -12,6 +13,8 @@
 namespace adl {
 
 using namespace std;
+
+class FileMetaData;
 
 struct DBOptions;
 class MemTable {
@@ -33,7 +36,7 @@ class MemTable {
   RC GetNoLock(string_view key, string &value);
   RC ForEachNoLock(
       std::function<RC(const MemKey &key, string_view value)> &&func);
-  RC BuildSSTable(string_view dbname, string &sstable_path);
+  RC BuildSSTable(string_view dbname, FileMetaData **meta_data_pointer);
   size_t GetMemTableSize();
 
  private:

@@ -213,7 +213,7 @@ RC WritAbleFile::Sync() {
   return OK;
 }
 
-RC WritAbleFile::Append(const std::string &data) {
+RC WritAbleFile::Append(string_view data) {
   auto data_len = data.size();
 
   /* 没有超过限制 */
@@ -253,7 +253,7 @@ RC TempFile::ReName(string_view new_file) {
   int ret = rename(file_path_.c_str(), true_path.c_str());
   if (ret) {
     MLog->error("tempfile name:{} rename to {} failed: {}", file_path_,
-                   true_path, strerror(errno));
+                true_path, strerror(errno));
     return RENAME_FILE_ERROR;
   }
   MLog->info("tempfile name:{} rename to {}", file_path_, true_path);
@@ -291,15 +291,14 @@ RC FileManager::OpenMmapReadAbleFile(string_view file_name,
   }
   size_t file_size = 0;
   if (rc = GetFileSize(file_name, &file_size); rc) {
-    MLog->error("Failed to open mmap file {}, error: {}", file_name,
-                   strrc(rc));
+    MLog->error("Failed to open mmap file {}, error: {}", file_name, strrc(rc));
     return rc;
   }
 
   if (auto base_addr = mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
       base_addr == MAP_FAILED) {
     MLog->error("Failed to mmap file {}, error: {}", file_name,
-                   strerror(errno));
+                strerror(errno));
     rc = MMAP_ERROR;
   } else {
     *result = new MmapReadAbleFile(file_name, (char *)base_addr, file_size);
@@ -308,7 +307,7 @@ RC FileManager::OpenMmapReadAbleFile(string_view file_name,
 
   if (close(fd)) {
     MLog->error("Failed to close mmap file {}, error: {}", file_name,
-                   strerror(errno));
+                strerror(errno));
     rc = CLOSE_FILE_ERROR;
   }
   return rc;
@@ -321,7 +320,7 @@ MmapReadAbleFile::MmapReadAbleFile(string_view file_name, char *base_addr,
 MmapReadAbleFile::~MmapReadAbleFile() {
   if (int ret = ::munmap((void *)base_addr_, file_size_); ret) {
     MLog->error("Failed to munmap file {}, error: {}", file_name_,
-                   strerror(errno));
+                strerror(errno));
   }
 }
 
@@ -337,13 +336,68 @@ RC MmapReadAbleFile::Read(size_t offset, size_t len, string_view &buffer) {
 RC FileManager::GetFileSize(string_view path, size_t *size) {
   struct stat file_stat;
   if (stat(path.data(), &file_stat)) {
-    MLog->error("can not get {} stat, error: {}", path.data(),
-                   strerror(errno));
+    MLog->error("can not get {} stat, error: {}", path.data(), strerror(errno));
     *size = 0;
     return STAT_FILE_ERROR;
   }
   *size = file_stat.st_size;
   return OK;
+}
+
+string LevelDir(string_view dbname) {
+  string level_dir(dbname);
+  if (!dbname.ends_with("/")) level_dir += '/';
+  level_dir += "level/";
+  return level_dir;
+}
+
+string LevelDir(string_view dbname, int n) {
+  string level_dir(dbname);
+  if (!dbname.ends_with("/")) level_dir += '/';
+  level_dir += "level/" + to_string(n) + "/";
+  return level_dir;
+}
+
+string LevelFile(string_view level_dir, string_view sha256_hex) {
+  string file_path(level_dir);
+  file_path += sha256_hex;
+  file_path += ".lvl";
+  return file_path;
+}
+
+string RevDir(string_view dbname) {
+  string rev_dir(dbname);
+  if (!dbname.ends_with("/")) rev_dir += '/';
+  rev_dir += "rev/";
+  return rev_dir;
+}
+
+string RevFile(string_view rev_dir, string_view sha256_hex) {
+  string file_path(rev_dir);
+  file_path += sha256_hex;
+  file_path += ".rev";
+  return file_path;
+}
+
+string CurrentFile(string_view dbname) {
+  string file_path(dbname);
+  if (!dbname.ends_with("/")) file_path += '/';
+  file_path += "CURRENT";
+  return file_path;
+}
+
+string SstDir(string_view dbname) {
+  string level_dir(dbname);
+  if (!dbname.ends_with("/")) level_dir += '/';
+  level_dir += "sst/";
+  return level_dir;
+}
+
+string SstFile(string_view sst_dir, string_view sha256_hex) {
+  string file_path(sst_dir);
+  file_path += sha256_hex;
+  file_path += ".sst";
+  return file_path;
 }
 
 }  // namespace adl

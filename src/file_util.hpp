@@ -1,8 +1,10 @@
 #ifndef ADL_LSM_TREE_FILE_UTIL_H__
 #define ADL_LSM_TREE_FILE_UTIL_H__
 
+#include <openssl/sha.h>
 #include <string>
 #include <string_view>
+#include "keys.hpp"
 #include "rc.hpp"
 
 namespace adl {
@@ -42,7 +44,7 @@ class WritAbleFile {
   WritAbleFile(const WritAbleFile &) = delete;
   WritAbleFile &operator=(const WritAbleFile &) = delete;
   virtual ~WritAbleFile();
-  /* virtual */ RC Append(const std::string &data);
+  /* virtual */ RC Append(string_view data);
   /* virtual */ RC Close();
   /* virtual */ RC Flush();
   /* virtual */ RC Sync();
@@ -83,6 +85,32 @@ class MmapReadAbleFile {
   size_t file_size_;
   string file_name_;
 };
+
+/**
+ * @brief 文件元数据
+ */
+struct FileMetaData {
+  size_t file_size;
+  int num_keys;
+  int belong_to_level;
+  MemKey max_inner_key;
+  MemKey min_inner_key;
+  string sstable_path;
+  unsigned char sha256[SHA256_DIGEST_LENGTH];
+
+  bool operator<(const FileMetaData &f) {
+    return min_inner_key < f.min_inner_key;
+  }
+};
+
+string LevelDir(string_view dbname);
+string LevelDir(string_view dbname, int n);
+string LevelFile(string_view level_dir, string_view sha256_hex);
+string RevDir(string_view dbname);
+string RevFile(string_view rev_dir, string_view sha256_hex);
+string CurrentFile(string_view dbname);
+string SstDir(string_view dbname);
+string SstFile(string_view sst_dir, string_view sha256_hex);
 
 }  // namespace adl
 

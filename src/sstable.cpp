@@ -11,14 +11,6 @@
 
 namespace adl {
 
-string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]) {
-  stringstream ss;
-  for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-    ss << hex << setw(2) << setfill('0') << (int)hash[i];
-  }
-  return ss.str();
-}
-
 SSTableWriter::SSTableWriter(string_view dbname, WritAbleFile *file,
                              const DBOptions &options)
     : dbname_(dbname),

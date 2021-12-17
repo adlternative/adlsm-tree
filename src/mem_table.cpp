@@ -2,9 +2,9 @@
 #include <string.h>
 #include <mutex>
 #include "file_util.hpp"
+#include "hash_util.hpp"
 #include "monitor_logger.hpp"
 #include "sstable.hpp"
-
 namespace adl {
 
 RC MemTable::Put(const MemKey &key, string_view value) {
@@ -38,34 +38,43 @@ RC MemTable::GetNoLock(string_view key, string &value) {
 }
 
 /* 一般是 IMEMTABLE 进行 BUILD 不需要加锁 */
-RC MemTable::BuildSSTable(string_view dbname, string &sstable_path) {
+RC MemTable::BuildSSTable(string_view dbname,
+                          FileMetaData **meta_data_pointer) {
   MLog->info("memtable -> sstable");
+  int sstable_level = 0;
   string true_path = FileManager::FixDirName(dbname);
   dbname = true_path;
-
-  unsigned char sha256[SHA256_DIGEST_LENGTH];
+  FileMetaData *meta_data = new FileMetaData;
   TempFile *temp_file = nullptr;
-  auto rc = FileManager::OpenTempFile(dbname, "tmp_sst_", &temp_file);
+  auto rc = FileManager::OpenTempFile(SstDir(dbname), "tmp_sst_", &temp_file);
   if (rc) return rc;
   auto sstable = new SSTableWriter(dbname, temp_file, *options_);
-
   if (rc = ForEachNoLock([&](const MemKey &memkey, string_view value) -> RC {
         string key = memkey.ToKey();
         return sstable->Add(key, value);
       });
       rc)
     return rc;
-  if (rc = sstable->Final(sha256); rc) return rc;
-  string sha256_hex = sha256_digit_to_hex(sha256);
-  sstable_path = dbname;
-  sstable_path += sha256_hex + ".sst";
-  temp_file->ReName(sstable_path);
-  temp_file->Close();
+  if (rc = sstable->Final(meta_data->sha256); rc) return rc;
+  meta_data->sstable_path =
+      SstFile(SstDir(dbname), sha256_digit_to_hex(meta_data->sha256));
+  if (rc = temp_file->ReName(meta_data->sstable_path); rc) return rc;
+  if (rc = FileManager::GetFileSize(meta_data->sstable_path,
+                                    &meta_data->file_size);
+      rc)
+    return rc;
+  if (rc = temp_file->Close(); rc) return rc;
 
-  MLog->info("sstable {} created", sstable_path);
+  MLog->info("sstable {} created", meta_data->sstable_path);
   delete sstable;
   delete temp_file;
 
+  meta_data->min_inner_key = table_.begin()->first;
+  meta_data->max_inner_key = table_.rbegin()->first;
+  meta_data->num_keys = (int)table_.size();
+  /* 目前 minor compaction 生成的 sstable 就放在 l0 */
+  meta_data->belong_to_level = sstable_level;
+  *meta_data_pointer = meta_data;
   return OK;
 }
 

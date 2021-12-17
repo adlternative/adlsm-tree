@@ -58,7 +58,6 @@ class SSTableWriter {
   string last_key_; /* 最后一次 add 的 key */
 };
 
-string sha256_digit_to_hex(unsigned char hash[SHA256_DIGEST_LENGTH]);
 
 class SSTableReader {
  public:

@@ -12,6 +12,8 @@
 
 namespace adl {
 
+class Revision;
+
 class DB {
  public:
   DB(string_view db_path, DBOptions &options);
@@ -40,6 +42,7 @@ class DB {
   bool NeedCompactions();
   bool NeedFreezeMemTable();
 
+  RC UpdateCurrentRev(Revision *rev);
   /* memory */
   shared_ptr<MemTable> mem_;
   shared_ptr<MemTable> imem_;
@@ -47,6 +50,7 @@ class DB {
   /* state */
   std::atomic<bool> closed_;
   std::atomic<int64_t> sequence_id_;
+  bool is_compacting_;
 
   /* disk */
   string dbname_;
@@ -60,11 +64,10 @@ class DB {
   /* back ground */
   vector<Worker *> workers_;
 
-  /* monitor_logger.hpp */
   // MonitorLogger monitor_logger_;
+  shared_ptr<Revision> current_rev_;
 
-  bool is_compacting_;
+  RC save_backgound_rc_;
 };
-
 }  // namespace adl
 #endif  // ADL_LSM_TREE_DB_H__

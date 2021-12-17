@@ -23,7 +23,9 @@ add_executable(mem_table_test
                src/filter_block.cpp
                src/footer_block.cpp
                src/murmur3_hash.cpp
+               src/hash_util.cpp
                src/encode.cpp
+               src/keys.cpp
                src/back_ground_worker.cpp
                src/monitor_logger.cpp
                test/mem_table_test.cpp)
@@ -40,6 +42,8 @@ add_executable(db_test
                src/filter_block.cpp
                src/footer_block.cpp
                src/murmur3_hash.cpp
+               src/hash_util.cpp
+               src/revision.cpp
                src/db.cpp
                src/keys.cpp
                src/encode.cpp
@@ -58,6 +62,7 @@ add_executable(block_test
                src/filter_block.cpp
                src/footer_block.cpp
                src/sstable.cpp
+               src/hash_util.cpp
                src/keys.cpp
                src/file_util.cpp
                test/block_test.cpp)
@@ -81,6 +86,7 @@ add_executable(sstable_test
                src/filter_block.cpp
                src/footer_block.cpp
                src/murmur3_hash.cpp
+               src/hash_util.cpp
                src/encode.cpp
                src/keys.cpp
                src/back_ground_worker.cpp
