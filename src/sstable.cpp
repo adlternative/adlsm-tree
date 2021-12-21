@@ -90,7 +90,7 @@ RC SSTableWriter::Final(unsigned char sha256_digit[]) {
 }
 
 RC SSTableReader::ReadFooterBlock() {
-  RC rc;
+  RC rc = OK;
   string_view footer_block_buffer;
 
   if (rc = file_->Read(file_size_ - FooterBlockWriter::footer_size,
@@ -109,7 +109,7 @@ RC SSTableReader::ReadFooterBlock() {
 }
 
 RC SSTableReader::ReadIndexBlock() {
-  RC rc;
+  RC rc = OK;
   string_view index_block_buffer;
   auto index_block_handle = foot_block_reader_.index_block_handle();
   MLog->info("Index Block Handle: off:{} size:{}",
@@ -132,7 +132,7 @@ RC SSTableReader::ReadIndexBlock() {
 }
 
 RC SSTableReader::ReadMetaBlock() {
-  RC rc;
+  RC rc = OK;
   string_view meta_block_buffer;
   auto meta_block_handle = foot_block_reader_.meta_block_handle();
   MLog->info("Meta Block Handle: off:{} size:{}",
@@ -153,7 +153,7 @@ RC SSTableReader::ReadMetaBlock() {
 }
 
 RC SSTableReader::ReadFilterBlock() {
-  RC rc;
+  RC rc = OK;
   BlockHandle filter_block_handle;
   string filter_block_handle_buffer;
   string_view filter_block_buffer;
@@ -183,7 +183,7 @@ RC SSTableReader::ReadFilterBlock() {
 
 RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table) {
   SSTableReader *t = new SSTableReader(file);
-  RC rc;
+  RC rc = OK;
   /* read footer */
   if (rc = t->ReadFooterBlock(); rc) return rc;
   MLog->info("Read footer block ok");
@@ -202,7 +202,7 @@ RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table) {
 }
 
 RC SSTableReader::Get(string_view inner_key, string &value) {
-  RC rc;
+  RC rc = OK;
   // MLog->trace("SSTableReader want Get key {}", key);
 
   /* 布隆过滤器过滤 */

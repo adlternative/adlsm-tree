@@ -2,8 +2,10 @@
 #define ADL_LSM_TREE_FILE_UTIL_H__
 
 #include <openssl/sha.h>
+#include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 #include "keys.hpp"
 #include "rc.hpp"
 
@@ -20,6 +22,9 @@ class WritAbleFile;
 class TempFile;
 class MmapReadAbleFile;
 class RandomAccessFile;
+class WAL;
+class WALReader;
+class SeqReadFile;
 
 class FileManager {
  public:
@@ -35,13 +40,29 @@ class FileManager {
   static RC OpenWritAbleFile(string_view filename, WritAbleFile **result);
   static RC OpenTempFile(string_view dir_path, string_view subfix,
                          TempFile **result);
+  static RC OpenAppendOnlyFile(string_view filename, WritAbleFile **result);
+
+  static RC OpenSeqReadFile(string_view filename, SeqReadFile **result);
+
   static RC OpenMmapReadAbleFile(string_view filename,
                                  MmapReadAbleFile **result);
   static RC OpenRandomAccessFile(string_view filename,
                                  RandomAccessFile **result);
   static RC ReadFileToString(string_view filename, string &result);
+
+  static RC OpenWAL(string_view dbname, string_view rev_oid, int64_t log_number,
+                    WAL **result);
+  static RC OpenWALReader(string_view dbname, string_view rev_oid,
+                          int64_t log_number, WALReader **result);
+  static RC OpenWALReader(string_view wal_file_path, WALReader **result);
+
+  static RC ReadDir(string_view directory_path, vector<string> &result);
+  static RC ReadDir(string_view directory_path,
+                    const std::function<bool(string_view)> &filter,
+                    const std::function<void(string_view)> &handle_result);
 };
 
+/* 缓冲顺序写 */
 class WritAbleFile {
  public:
   WritAbleFile(string_view filename, int fd);
@@ -52,7 +73,7 @@ class WritAbleFile {
   /* virtual */ RC Close();
   /* virtual */ RC Flush();
   /* virtual */ RC Sync();
-
+  string GetPath();
   static RC Open(string_view filename, WritAbleFile **result);
 
  public:
@@ -68,6 +89,21 @@ class WritAbleFile {
   size_t pos_;
 };
 
+/* 顺序读 */
+class SeqReadFile {
+ public:
+  SeqReadFile(string_view filename, int fd);
+  ~SeqReadFile();
+  RC Read(size_t len, string &buffer, string_view &result);
+  RC Skip(size_t n);
+  string GetPath();
+
+ private:
+  string filename_;
+  int fd_;
+};
+
+/* 临时写文件 */
 class TempFile : public WritAbleFile {
  public:
   TempFile(const std::string &filename, int fd);
@@ -75,8 +111,7 @@ class TempFile : public WritAbleFile {
   static RC Open(string_view dir_path, string_view subfix, TempFile **result);
 };
 
-ssize_t write_n(int fd, const char *buf, size_t len);
-
+/* mmap 读 */
 class MmapReadAbleFile {
  public:
   MmapReadAbleFile(string_view file_name, char *base_addr, size_t file_size);
@@ -90,6 +125,7 @@ class MmapReadAbleFile {
   string file_name_;
 };
 
+/* 随机读 */
 class RandomAccessFile {
  public:
   RandomAccessFile(string_view filename, int fd);
@@ -121,6 +157,9 @@ struct FileMetaData {
   }
 };
 
+ssize_t write_n(int fd, const char *buf, size_t len);
+ssize_t read_n(int fd, const char *buf, size_t len);
+
 string LevelDir(string_view dbname);
 string LevelDir(string_view dbname, int n);
 string LevelFile(string_view level_dir, string_view sha256_hex);
@@ -129,6 +168,10 @@ string RevFile(string_view rev_dir, string_view sha256_hex);
 string CurrentFile(string_view dbname);
 string SstDir(string_view dbname);
 string SstFile(string_view sst_dir, string_view sha256_hex);
+string WalDir(string_view dbname);
+string WalFile(string_view wal_dir, string_view rev_oid, int64_t log_number);
+
+RC ParseWalFile(string_view filename, int64_t &seq);
 
 }  // namespace adl
 

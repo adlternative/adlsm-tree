@@ -7,7 +7,8 @@ using namespace std;
 
 void Decode32(const char *src, int *dest);
 void Encode32(int src, char *dest);
-void EncodeWithPreLen(string_view data, string &dest);
+void EncodeWithPreLen(string &dest, string_view data);
+int DecodeWithPreLen(string &dest, string_view data);
 
 }  // namespace adl
 

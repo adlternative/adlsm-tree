@@ -208,7 +208,7 @@ RC BlockReader::BsearchRestartPoint(string_view key, int *index) {
   int unshared_key_len;
   int shared_key_len;
   string_view restarts_key;
-  RC rc;
+  RC rc = OK;
   /* 二分找到恰好小于等于 key 的重启点 */
   while (left <= right) {
     int mid = (left + right) >> 1;

@@ -12,6 +12,7 @@
 #include <filesystem>
 #include "monitor_logger.hpp"
 #include "rc.hpp"
+#include "wal.hpp"
 
 namespace adl {
 
@@ -141,6 +142,30 @@ RC FileManager::OpenTempFile(string_view dir_path, string_view subfix,
   return TempFile::Open(dir_path, subfix, result);
 }
 
+RC FileManager::OpenAppendOnlyFile(string_view filename,
+                                   WritAbleFile **result) {
+  int fd =
+      ::open(filename.data(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+  if (fd < 0) {
+    *result = nullptr;
+    return OPEN_FILE_ERROR;
+  }
+
+  *result = new WritAbleFile(filename, fd);
+  return OK;
+}
+
+RC FileManager::OpenSeqReadFile(string_view filename, SeqReadFile **result) {
+  int fd = ::open(filename.data(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    *result = nullptr;
+    return OPEN_FILE_ERROR;
+  }
+
+  *result = new SeqReadFile(filename, fd);
+  return OK;
+}
+
 WritAbleFile::WritAbleFile(string_view file_path, int fd)
     : file_path_(file_path), fd_(fd), pos_(0), closed_(false) {}
 
@@ -155,6 +180,33 @@ RC WritAbleFile::Open(string_view file_path, WritAbleFile **result) {
   *result = new WritAbleFile(file_path, fd);
   return OK;
 }
+
+SeqReadFile::SeqReadFile(string_view filename, int fd)
+    : filename_(filename), fd_(fd) {}
+
+SeqReadFile::~SeqReadFile() { close(fd_); }
+
+RC SeqReadFile::Read(size_t len, string &buffer, string_view &result) {
+  RC rc = OK;
+  if (len > buffer.size()) buffer.resize(len);
+  auto ret = read_n(fd_, buffer.data(), len);
+  if (ret == -1) {
+    MLog->error("read_n failed");
+    return IO_ERROR;
+  }
+  result = {buffer.data(), (size_t)ret};
+  return rc;
+}
+
+RC SeqReadFile::Skip(size_t n) {
+  if (lseek(fd_, n, SEEK_CUR) == -1) {
+    MLog->error("lseek failed");
+    return IO_ERROR;
+  }
+  return OK;
+}
+
+string SeqReadFile::GetPath() { return filename_; }
 
 WritAbleFile::~WritAbleFile() {
   if (!closed_) Close();
@@ -183,6 +235,24 @@ ssize_t write_n(int fd, const char *buf, size_t len) {
         continue;
       }
       return -1;
+    }
+    n += r;
+  }
+  return n;
+}
+
+ssize_t read_n(int fd, const char *buf, size_t len) {
+  ssize_t n = 0;
+  while (n < len) {
+    ssize_t r = read(fd, (void *)(buf + n), len - n);
+    if (r < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return -1;
+    }
+    if (r == 0) {
+      return n;
     }
     n += r;
   }
@@ -281,9 +351,35 @@ RC TempFile::Open(string_view dir_path, string_view subfix, TempFile **result) {
   return OK;
 }
 
+RC FileManager::OpenWAL(string_view dbname, string_view rev_oid,
+                        int64_t log_number, WAL **result) {
+  /* open append only file for wal */
+  string wal_file_name = WalFile(WalDir(dbname), rev_oid, log_number);
+  MLog->info("wal_file_name: {}", wal_file_name);
+
+  WritAbleFile *wal_file = nullptr;
+  if (auto rc = OpenAppendOnlyFile(wal_file_name, &wal_file); rc) return rc;
+  *result = new WAL(wal_file);
+  return OK;
+}
+
+RC FileManager::OpenWALReader(string_view dbname, string_view rev_oid,
+                              int64_t log_number, WALReader **result) {
+  /* open append only file for wal */
+  return OpenWALReader(WalFile(WalDir(dbname), rev_oid, log_number), result);
+}
+
+RC FileManager::OpenWALReader(string_view wal_file_path, WALReader **result) {
+  /* open append only file for wal */
+  SeqReadFile *seq_read_file = nullptr;
+  if (auto rc = OpenSeqReadFile(wal_file_path, &seq_read_file); rc) return rc;
+  *result = new WALReader(seq_read_file);
+  return OK;
+}
+
 RC FileManager::OpenMmapReadAbleFile(string_view file_name,
                                      MmapReadAbleFile **result) {
-  RC rc;
+  RC rc = OK;
   int fd = ::open(file_name.data(), O_RDONLY | O_CLOEXEC);
   if (fd < 0) {
     *result = nullptr;
@@ -315,7 +411,7 @@ RC FileManager::OpenMmapReadAbleFile(string_view file_name,
 
 RC FileManager::ReadFileToString(string_view filename, string &result) {
   MmapReadAbleFile *mmap_readable_file = nullptr;
-  RC rc;
+  RC rc = OK;
   if (rc = OpenMmapReadAbleFile(filename, &mmap_readable_file); rc) {
     MLog->error("ReadFileToString {} error: {}", filename, strrc(rc));
   } else {
@@ -328,6 +424,30 @@ RC FileManager::ReadFileToString(string_view filename, string &result) {
   }
   delete mmap_readable_file;
   return rc;
+}
+
+/* 获得一个文件夹的所有子文件 opendir+readdir+closedir */
+RC FileManager::ReadDir(string_view directory_path,
+                        std::vector<std::string> &result) {
+  result.clear();
+  DIR *dir = opendir(directory_path.data());
+  if (dir == nullptr) return IO_ERROR;
+  struct dirent *entry;
+  while ((entry = readdir(dir)) != nullptr) result.emplace_back(entry->d_name);
+  closedir(dir);
+  return OK;
+}
+
+RC FileManager::ReadDir(string_view directory_path,
+                        const std::function<bool(string_view)> &filter,
+                        const std::function<void(string_view)> &handle_result) {
+  DIR *dir = opendir(directory_path.data());
+  if (dir == nullptr) return IO_ERROR;
+  struct dirent *entry;
+  while ((entry = readdir(dir)) != nullptr)
+    if (filter(entry->d_name)) handle_result(entry->d_name);
+  closedir(dir);
+  return OK;
 }
 
 MmapReadAbleFile::MmapReadAbleFile(string_view file_name, char *base_addr,
@@ -435,11 +555,28 @@ string SstDir(string_view dbname) {
   return level_dir;
 }
 
-string SstFile(string_view sst_dir, string_view sha256_hex) {
-  string file_path(sst_dir);
-  file_path += sha256_hex;
-  file_path += ".sst";
-  return file_path;
+string SstFile(string_view sst_dir, string_view sst_oid) {
+  return fmt::format("{}{}.sst", sst_dir, sst_oid);
 }
 
+string WalDir(string_view dbname) {
+  string wal_dir(dbname);
+  if (!dbname.ends_with("/")) wal_dir += '/';
+  wal_dir += "wal/";
+  return wal_dir;
+}
+
+string WalFile(string_view wal_dir, string_view rev_oid, int64_t log_number) {
+  return fmt::format("{}{}-{}.wal", wal_dir, rev_oid, log_number);
+}
+
+RC ParseWalFile(string_view filename, int64_t &seq) {
+  std::istringstream iss(string(filename.substr(
+      SHA256_DIGEST_LENGTH * 2 + 1,
+      filename.length() - (SHA256_DIGEST_LENGTH * 2 + 1) - strlen(".wal"))));
+  iss >> seq;
+  return OK;
+}
+
+std::string WritAbleFile::GetPath() { return file_path_; }
 }  // namespace adl

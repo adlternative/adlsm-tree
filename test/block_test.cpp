@@ -128,7 +128,7 @@ TEST(block_test, Get1) {
   block.Final(result);
   block.Reset();
   string value;
-  RC rc;
+  RC rc = OK;
 
   ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
   rc = block_reader.Get("key0", value);
@@ -148,7 +148,7 @@ TEST(block_test, Get2) {
   BlockReader block_reader;
   map<string, string> m;
   string result;
-  RC rc;
+  RC rc = OK;
   for (int i = 0; i < 20; i++) {
     string key("key");
     key += std::to_string(i);
@@ -181,7 +181,7 @@ TEST(block_test, Get3) {
   BlockReader block_reader;
   map<string, string> m;
   string result;
-  RC rc;
+  RC rc = OK;
   for (int i = 0; i < 2000; i++) {
     string key("key");
     key += std::to_string(i);
@@ -215,7 +215,7 @@ TEST(block_test, Get4) {
   DBOptions opt;
   MemTable mem_table(opt);
   string result;
-  RC rc;
+  RC rc = OK;
   for (int i = 0; i < 2000; i++) {
     string key("key");
     key += std::to_string(i);
