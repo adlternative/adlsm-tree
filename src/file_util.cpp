@@ -313,6 +313,23 @@ RC FileManager::OpenMmapReadAbleFile(string_view file_name,
   return rc;
 }
 
+RC FileManager::ReadFileToString(string_view filename, string &result) {
+  MmapReadAbleFile *mmap_readable_file = nullptr;
+  RC rc;
+  if (rc = OpenMmapReadAbleFile(filename, &mmap_readable_file); rc) {
+    MLog->error("ReadFileToString {} error: {}", filename, strrc(rc));
+  } else {
+    auto file_size = mmap_readable_file->Size();
+    result.resize(file_size);
+    string_view result_view;
+    if (auto rc = mmap_readable_file->Read(0, file_size, result_view); rc)
+      MLog->error("mmap_readable_file {} Read error: {}", filename, strrc(rc));
+    result = result_view;
+  }
+  delete mmap_readable_file;
+  return rc;
+}
+
 MmapReadAbleFile::MmapReadAbleFile(string_view file_name, char *base_addr,
                                    size_t file_size)
     : file_name_(file_name), base_addr_(base_addr), file_size_(file_size) {}
@@ -331,6 +348,31 @@ RC MmapReadAbleFile::Read(size_t offset, size_t len, string_view &buffer) {
   }
   buffer = {base_addr_ + offset, len};
   return OK;
+}
+
+RandomAccessFile::RandomAccessFile(string_view filename, int fd)
+    : file_name_(filename), fd_(fd) {}
+
+RC RandomAccessFile::Read(size_t offset, size_t len, string_view &buffer,
+                          bool use_extra_buffer) {
+  char *buf;
+  if (!use_extra_buffer) {
+    buf = new char[len];
+  } else {
+    buf = (char *)buffer.data();
+  }
+  /* better than seek + read ; which will not change file pointer */
+  ssize_t read_len = pread(fd_, buf, len, (off_t)offset);
+  if (read_len < 0) {
+    if (!use_extra_buffer) delete[] buf;
+    return IO_ERROR;
+  }
+  if (!use_extra_buffer) buffer = {buf, (size_t)read_len};
+  return OK;
+}
+
+RandomAccessFile::~RandomAccessFile() {
+  if (fd_ != -1) close(fd_);
 }
 
 RC FileManager::GetFileSize(string_view path, size_t *size) {

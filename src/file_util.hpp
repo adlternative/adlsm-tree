@@ -19,6 +19,7 @@ enum FileOptions {
 class WritAbleFile;
 class TempFile;
 class MmapReadAbleFile;
+class RandomAccessFile;
 
 class FileManager {
  public:
@@ -36,6 +37,9 @@ class FileManager {
                          TempFile **result);
   static RC OpenMmapReadAbleFile(string_view filename,
                                  MmapReadAbleFile **result);
+  static RC OpenRandomAccessFile(string_view filename,
+                                 RandomAccessFile **result);
+  static RC ReadFileToString(string_view filename, string &result);
 };
 
 class WritAbleFile {
@@ -86,10 +90,24 @@ class MmapReadAbleFile {
   string file_name_;
 };
 
+class RandomAccessFile {
+ public:
+  RandomAccessFile(string_view filename, int fd);
+  RC Read(size_t offset, size_t len, string_view &buffer,
+          bool use_extra_buffer = false);
+  ~RandomAccessFile();
+
+ private:
+  string file_name_;
+  int fd_;
+};
+
 /**
  * @brief 文件元数据
  */
 struct FileMetaData {
+  FileMetaData() : file_size(0), num_keys(0), belong_to_level(-1) {}
+
   size_t file_size;
   int num_keys;
   int belong_to_level;
