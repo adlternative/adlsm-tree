@@ -7,16 +7,24 @@ CURRENT Format:
 
 Revisions Format:
 
-| LEVEL | SHA           |
-| ----- | ------------- |
-| 0     | `<level-sha>` |
-| 1     | `<level-sha>` |
-| 2     | `<level-sha>` |
-| 3     | `<level-sha>` |
-| 4     | `<level-sha>` |
+  | revision wal seq number |
+  | ----------------------- |
+  | 3                       |
+
+  | LEVEL | SHA           |
+  | ----- | ------------- |
+  | 0     | `<level-sha>` |
+  | 1     | `<level-sha>` |
+  | 2     | `<level-sha>` |
+  | 3     | `<level-sha>` |
+  | 4     | `<level-sha>` |
 
 
 Level Format:
+
+  | Level | FileNum |
+  | ----- | ------- |
+  | 1     | 3       |
 
   | min-key len | min-key | max-key len | max-key | SHA             |
   | ----------- | ------- | ----------- | ------- | --------------- |
@@ -25,6 +33,8 @@ Level Format:
   |             | esakld  |             | faslkdj | `<sstable-sha>` |
   |             | fjaskl  |             | qeku    | `<sstable-sha>` |
   |             | ylyly   |             | zzzz    | `<sstable-sha>` |
+
+
 
 第 n 层 `level` 对象文件位于 `dbname/objects/level/<n>/xxx.lvl`。
 `sstable` 对象文件位于 `dbname/objects/sst/xxx.sst`。

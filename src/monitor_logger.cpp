@@ -17,6 +17,8 @@ void MonitorLogger::SetDbNameAndOptions(const string &db_name,
     logger->set_pattern(options->log_pattern);
     logger->set_level(options->log_level);
     spdlog::flush_every(std::chrono::seconds(1));
+    spdlog::flush_on(spdlog::level::info);
+    spdlog::flush_on(spdlog::level::debug);
     // then spdloge::get("logger_name")
     // spdlog::register_logger(logger);
   } catch (std::exception &ex) {

@@ -87,3 +87,102 @@ TEST(db, test_db_put_get) {
   delete db;
 }
 #endif
+
+TEST(db, test_current_create) {
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "/tmp/adl-testdb1";
+  opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
+  auto rc = DB::Open(dbname, opts, &db);
+  ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
+  ASSERT_EQ(FileManager::Exists(CurrentFile(dbname)), true);
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+}
+
+TEST(db, test_db_reopen) {
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "/tmp/adl-testdb1";
+  opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
+  for (int i = 0; i < 10; i++) {
+    ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+    ASSERT_EQ(db->Close(), OK);
+    delete db;
+  }
+  /* for (int i = 0; i < 5000; i++) {
+      string key = "key" + to_string(i);
+      string val = "value" + to_string(i);
+      ASSERT_EQ(db->Put(key, val), OK) << "put error";
+    }
+    for (int i = 0; i < 5000; i++) {
+      string key = "key" + to_string(i);
+      ASSERT_EQ(db->Delete(key), OK) << "delete error";
+    } */
+}
+
+TEST(db, test_db_reopen2) {
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "/tmp/adl-testdb1";
+  opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  for (int i = 0; i < 200000; i++) {
+    string key = "key" + to_string(i);
+    string val = "value" + to_string(i);
+    ASSERT_EQ(db->Put(key, val), OK) << "put error";
+  }
+  for (int i = 0; i < 200000; i++) {
+    string key = "key" + to_string(i);
+    ASSERT_EQ(db->Delete(key), OK) << "delete error";
+  }
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+}
+
+TEST(db, test_db_reopen3) {
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "/tmp/adl-testdb1";
+  opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  for (int i = 0; i < 200000; i++) {
+    string key = "key" + to_string(i);
+    string val = "value" + to_string(i);
+    ASSERT_EQ(db->Put(key, val), OK) << "put error";
+  }
+  for (int i = 0; i < 200000; i++) {
+    string key = "key" + to_string(i);
+    ASSERT_EQ(db->Delete(key), OK) << "delete error";
+  }
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  for (int i = 0; i < 200000; i++) {
+    string key = "key" + to_string(i);
+    string val = "value" + to_string(i);
+    ASSERT_EQ(db->Put(key, val), OK) << "put error";
+  }
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+}
+
+/* used for test if can reopen db after crash it !!! */
+TEST(db, test_db_open) {
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "/tmp/adl-testdb1";
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+}

@@ -32,13 +32,12 @@ RC WAL::Sync() {
   return wal_file_->Sync();
 }
 
-RC WAL::Close() {
-  RC rc = OK;
-  rc = wal_file_->Close();
-  return rc;
-}
+RC WAL::Close() { return wal_file_->Close(); }
 
-RC WAL::Drop() { return FileManager::Destroy(wal_file_->GetPath()); }
+RC WAL::Drop() {
+  MLog->info("Drop WAL file {}", wal_file_->GetPath());
+  return FileManager::Destroy(wal_file_->GetPath());
+}
 
 WALReader::WALReader(SeqReadFile *wal_file)
     : wal_file_(wal_file) /* , offset_(0)  */ {}
@@ -81,11 +80,11 @@ RC WALReader::ReadRecord(string &record) {
   return rc;
 }
 
-RC WALReader::Drop() { return FileManager::Destroy(wal_file_->GetPath()); }
-
-RC WALReader::Close() {
-  wal_file_.reset();
-  return OK;
+RC WALReader::Drop() {
+  MLog->info("Drop WAL file {}", wal_file_->GetPath());
+  return FileManager::Destroy(wal_file_->GetPath());
 }
+
+RC WALReader::Close() { return wal_file_->Close(); }
 
 }  // namespace adl

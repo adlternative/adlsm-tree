@@ -21,11 +21,11 @@ class DB {
   DB(const DB &) = delete;
   DB &operator=(const DB &) = delete;
 
+  static RC Create(string_view dbname, DBOptions &options, DB **dbptr);
   static RC Open(string_view dbname, DBOptions &options, DB **dbptr);
-  static RC Create(string_view dbname);
   static RC Destroy(string_view dbname);
   RC Close();
-
+  RC Sync();
   RC Put(string_view key, string_view value);
   RC Delete(string_view key);
 
@@ -37,13 +37,19 @@ class DB {
   RC DoCompaction();
   RC DoMinorCompaction();
 
-  RC BuildSSTable();
-  void FreezeMemTable();
+  RC BuildSSTable(const shared_ptr<adl::MemTable> &mem);
+  RC FreezeMemTable();
   bool NeedCompactions();
   bool NeedFreezeMemTable();
 
   RC UpdateCurrentRev(Revision *rev);
-  /* memory */
+  RC WriteCurrentRev(string_view write_buffer);
+
+  RC LoadMetaData();
+  RC LoadWALs();
+  RC LoadWAL(string_view wal_file_path);
+
+  /* memtables */
   shared_ptr<MemTable> mem_;
   shared_ptr<MemTable> imem_;
 
@@ -63,11 +69,10 @@ class DB {
 
   /* back ground */
   vector<Worker *> workers_;
+  RC save_backgound_rc_;
 
   // MonitorLogger monitor_logger_;
   shared_ptr<Revision> current_rev_;
-
-  RC save_backgound_rc_;
 };
 }  // namespace adl
 #endif  // ADL_LSM_TREE_DB_H__

@@ -32,6 +32,7 @@ enum RC {
   BAD_RECORD,
   FILE_EOF,
   CHECK_SUM_ERROR,
+  NOEXCEPT_SIZE,
 };
 
 inline std::string_view strrc(RC rc) {
@@ -86,6 +87,8 @@ inline std::string_view strrc(RC rc) {
       return "check sum error";
     case FILE_EOF:
       return "file eof";
+    case NOEXCEPT_SIZE:
+      return "noexcept size";
     default:
       return "unknown error";
   }

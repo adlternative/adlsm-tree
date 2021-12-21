@@ -18,6 +18,19 @@ RC MemTable::Put(const MemKey &key, string_view value) {
   return OK;
 }
 
+RC MemTable::PutTeeWAL(const MemKey &key, string_view value) {
+  RC rc = OK;
+  /* 首先写到预写日志 wal */
+  assert(wal_);
+  rc = wal_->AddRecord(EncodeKVPair(key, value));
+  if (rc) return rc;
+  rc = wal_->Sync();
+  if (rc) return rc;
+  /* 然后再写入内存表 memtable */
+  rc = Put(key, value);
+  return rc;
+}
+
 RC MemTable::Get(string_view key, string &value) {
   lock_guard<mutex> lock(mu_);
   return GetNoLock(key, value);
@@ -90,11 +103,29 @@ RC MemTable::ForEachNoLock(
   return OK;
 }
 
-MemTable::MemTable(const DBOptions &options) : options_(&options) {}
+MemTable::MemTable(const DBOptions &options)
+    : options_(&options), wal_(nullptr) {}
+
+MemTable::MemTable(const DBOptions &options, WAL *wal)
+    : options_(&options), wal_(wal) {}
 
 size_t MemTable::GetMemTableSize() {
   lock_guard<mutex> lock(mu_);
   return stat_.Sum();
 }
 
+RC MemTable::DropWAL() {
+  RC rc = OK;
+  if (wal_) {
+    MLog->trace("MemTable::DropWAL");
+    if (rc = wal_->Sync(); rc) return rc;
+    if (rc = wal_->Close(); rc) return rc;
+    if (rc = wal_->Drop(); rc) return rc;
+    delete wal_;
+    wal_ = nullptr;
+  }
+  return rc;
+}
+
+bool MemTable::Empty() { return table_.empty(); }
 }  // namespace adl

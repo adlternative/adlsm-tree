@@ -182,9 +182,9 @@ RC WritAbleFile::Open(string_view file_path, WritAbleFile **result) {
 }
 
 SeqReadFile::SeqReadFile(string_view filename, int fd)
-    : filename_(filename), fd_(fd) {}
+    : filename_(filename), fd_(fd), closed_(false) {}
 
-SeqReadFile::~SeqReadFile() { close(fd_); }
+SeqReadFile::~SeqReadFile() { Close(); }
 
 RC SeqReadFile::Read(size_t len, string &buffer, string_view &result) {
   RC rc = OK;
@@ -207,6 +207,16 @@ RC SeqReadFile::Skip(size_t n) {
 }
 
 string SeqReadFile::GetPath() { return filename_; }
+
+RC SeqReadFile::Close() {
+  if (!closed_) {
+    int ret = close(fd_);
+    if (ret == -1) return CLOSE_FILE_ERROR;
+    closed_ = true;
+    fd_ = -1;
+  }
+  return OK;
+}
 
 WritAbleFile::~WritAbleFile() {
   if (!closed_) Close();
@@ -355,11 +365,14 @@ RC FileManager::OpenWAL(string_view dbname, string_view rev_oid,
                         int64_t log_number, WAL **result) {
   /* open append only file for wal */
   string wal_file_name = WalFile(WalDir(dbname), rev_oid, log_number);
-  MLog->info("wal_file_name: {}", wal_file_name);
-
   WritAbleFile *wal_file = nullptr;
-  if (auto rc = OpenAppendOnlyFile(wal_file_name, &wal_file); rc) return rc;
+
+  if (auto rc = OpenAppendOnlyFile(wal_file_name, &wal_file); rc) {
+    MLog->error("open wal file {} failed: {}", wal_file_name, rc);
+    return rc;
+  }
   *result = new WAL(wal_file);
+  MLog->info("wal_file {} created", wal_file_name);
   return OK;
 }
 

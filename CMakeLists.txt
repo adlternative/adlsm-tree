@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(adlsm-tree)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS_DEBUG "-std=c++2a -g -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_DEBUG "-std=c++2a -g -fno-omit-frame-pointer -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++2a -O2")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -48,9 +48,10 @@ add_executable(db_test
                src/keys.cpp
                src/encode.cpp
                src/back_ground_worker.cpp
+               src/wal.cpp
                src/monitor_logger.cpp
                test/db_test.cpp)
-target_link_libraries(db_test crypto gtest gtest_main pthread fmt spdlog)
+target_link_libraries(db_test crypto gtest gtest_main pthread fmt spdlog crc32c)
 
 # 块测试
 add_executable(block_test
@@ -92,7 +93,7 @@ add_executable(sstable_test
                src/back_ground_worker.cpp
                src/monitor_logger.cpp
                test/sstable_test.cpp)
-target_link_libraries(sstable_test crypto gtest gtest_main pthread fmt spdlog)
+target_link_libraries(sstable_test crypto gtest gtest_main pthread fmt spdlog crc32c)
 
 # 文件工具测试
 add_executable(file_util_test

@@ -1,5 +1,6 @@
 #include "keys.hpp"
 #include <string.h>
+#include "encode.hpp"
 namespace adl {
 
 string_view InnerKeyToUserKey(string_view inner_key) {
@@ -88,4 +89,19 @@ adl::RC EasySave(string_view rk, string_view rv, string_view tk, string &dv) {
   dv.assign(rv.data(), rv.length());
   return adl::OK;
 }
+
+string EncodeKVPair(const MemKey &key, string_view value) {
+  string kv_pair;
+  EncodeWithPreLen(kv_pair, key.ToKey());
+  EncodeWithPreLen(kv_pair, value);
+  return kv_pair;
+}
+
+void DecodeKVPair(string_view data, MemKey &memkey, string &value) {
+  string key;
+  int pos = DecodeWithPreLen(key, data);
+  pos = DecodeWithPreLen(value, data.substr(pos));
+  memkey.FromKey(key);
+}
+
 }  // namespace adl

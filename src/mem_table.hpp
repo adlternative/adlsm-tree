@@ -9,6 +9,7 @@
 #include <string>
 #include "keys.hpp"
 #include "rc.hpp"
+#include "wal.hpp"
 
 namespace adl {
 
@@ -31,19 +32,28 @@ class MemTable {
   };
 
   MemTable(const DBOptions &options);
+  MemTable(const DBOptions &options, WAL *wal);
+  ~MemTable() {
+    if (wal_) delete wal_;
+  }
   RC Put(const MemKey &key, string_view value);
+  RC PutTeeWAL(const MemKey &key, string_view value);
+
   RC Get(string_view key, string &value);
   RC GetNoLock(string_view key, string &value);
   RC ForEachNoLock(
       std::function<RC(const MemKey &key, string_view value)> &&func);
   RC BuildSSTable(string_view dbname, FileMetaData **meta_data_pointer);
   size_t GetMemTableSize();
+  RC DropWAL();
+  bool Empty();
 
  private:
   mutable mutex mu_;
   const DBOptions *options_;
   map<MemKey, string> table_;
   Stat stat_; /* 整个内存表的状态 */
+  WAL *wal_;
 };
 
 }  // namespace adl

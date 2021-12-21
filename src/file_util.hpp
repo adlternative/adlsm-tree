@@ -97,10 +97,12 @@ class SeqReadFile {
   RC Read(size_t len, string &buffer, string_view &result);
   RC Skip(size_t n);
   string GetPath();
+  RC Close();
 
  private:
   string filename_;
   int fd_;
+  bool closed_;
 };
 
 /* 临时写文件 */

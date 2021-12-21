@@ -1,6 +1,7 @@
 #ifndef ADL_LSM_TREE_REVISION_H__
 #define ADL_LSM_TREE_REVISION_H__
 
+#include <cstring>
 #include <memory>
 #include <set>
 #include <string>
@@ -65,14 +66,12 @@ struct FileMetaDataCompare {
   在 Major Compaction 发生时，L0.s1 L0.s2 L1.s3 L1.s4 通过检查 KEY 的 SEQ
  进行合并。
  */
-
-
-
 class Level {
  public:
-  Level() : level_(-1) {}
+  Level();
   Level(const Level &);
   Level &operator=(Level &);
+  Level(int level, const string_view &oid);
 
   void Insert(FileMetaData *file_meta);
   void Erase(FileMetaData *file_meta);
@@ -81,6 +80,8 @@ class Level {
   int GetLevel() const;
   void SetLevel(int level) { level_ = level; }
   RC BuildFile(string_view dbname);
+  RC LoadFromFile(string_view dbname, string_view lvl_sha_hex);
+  bool HaveCheckSum() const;
 
  private:
   /* checksum */
@@ -96,7 +97,9 @@ class Level {
  * @brief Revision 版本对象
   Revisions Format:
 
-  | LEVEL | SHA           |
+  | revision wal seq number |
+  |          3             |
+  | LEVEL | SHA            |
   | ----- | ------------- |
   | 1     | `<level-sha>` |
   | 2     | `<level-sha>` |
@@ -111,8 +114,11 @@ class Revision {
   Revision(vector<Level> &&levels) noexcept;
   string GetOid() const;
   RC BuildFile(string_view dbname);
-
   const vector<Level> &GetLevels();
+  void SetLevel(int level, Level *v);
+  void SetSeq(int64_t seq);
+  int64_t GetSeq() { return seq_; }
+  RC LoadFromFile(string_view dbname, string_view rev_sha_hex);
 
  private:
   /* checksum */
@@ -120,6 +126,7 @@ class Revision {
   unsigned char sha256_digit_[SHA256_DIGEST_LENGTH];
   /* 层级 */
   vector<Level> levels_;
+  int64_t seq_;
 };
 
 }  // namespace adl

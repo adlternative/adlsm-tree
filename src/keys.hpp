@@ -43,5 +43,8 @@ string NewMinInnerKey(string_view key);
 int EasyCmp(std::string_view key1, std::string_view key2);
 adl::RC EasySave(string_view rk, string_view rv, string_view tk, string &dv);
 
+string EncodeKVPair(const MemKey &key, string_view value);
+void DecodeKVPair(string_view data, MemKey &memkey, string &value);
+
 }  // namespace adl
 #endif  // ADL_LSM_TREE_KEYS_H__
