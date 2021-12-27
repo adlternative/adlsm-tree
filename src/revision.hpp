@@ -82,12 +82,9 @@ class Level {
   RC BuildFile(string_view dbname);
   RC LoadFromFile(string_view dbname, string_view lvl_sha_hex);
   bool HaveCheckSum() const;
-  int64_t GetMaxSeq() {
-    if (files_meta_.empty()) return 0;
-    auto back = files_meta_.end();
-    back--;
-    return back->get()->max_inner_key.seq_;
-  }
+  int64_t GetMaxSeq();
+
+  RC Get(string_view key, string &value);
 
  private:
   /* checksum */
@@ -133,6 +130,8 @@ class Revision {
       maxseq = max(maxseq, levels_[i].GetMaxSeq());
     return maxseq;
   }
+
+  RC Get(string_view key, std::string &value);
 
  private:
   /* checksum */

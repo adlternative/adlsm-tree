@@ -11,6 +11,14 @@
 
 namespace adl {
 
+Level::Level(int level, const string_view &oid) : level_(level) {
+  hex_to_sha256_digit(oid, sha256_digit_);
+}
+
+Level::Level() : level_(-1) {
+  memset(sha256_digit_, 0, SHA256_DIGEST_LENGTH * sizeof(unsigned char));
+}
+
 Level::Level(const Level &rhs)
     : level_(rhs.level_), files_meta_(rhs.files_meta_), sha256_(rhs.sha256_) {
   memcpy(&sha256_digit_, &rhs.sha256_digit_, SHA256_DIGEST_LENGTH);
@@ -227,6 +235,27 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
   return rc;
 }
 
+RC Level::Get(string_view key, string &value) {
+  RC rc = OK;
+  if (level_) return UN_IMPLEMENTED;
+  MemKey mk = MemKey::NewMinMemKey(key);
+
+  for (auto &file_meta : files_meta_) {
+    if (mk < file_meta->min_inner_key) continue;
+    if (file_meta->max_inner_key < mk) continue;
+    if (rc = file_meta->Get(key, value); rc) return rc;
+    return rc;
+  }
+  return rc;
+}
+
+int64_t Level::GetMaxSeq() {
+  if (files_meta_.empty()) return 0;
+  auto back = files_meta_.end();
+  back--;
+  return back->get()->max_inner_key.seq_;
+}
+
 Revision::Revision(vector<Level> &&levels, deque<int64_t> &&log_nums) noexcept
     : levels_(std::move(levels)), log_nums_(std::move(log_nums)) {}
 
@@ -304,12 +333,13 @@ Revision::Revision() : /* seq_(0), */ levels_(5) {
   for (int i = 0; i < 5; ++i) levels_[i].SetLevel(i);
 }
 
-Level::Level(int level, const string_view &oid) : level_(level) {
-  hex_to_sha256_digit(oid, sha256_digit_);
-}
-
-Level::Level() : level_(-1) {
-  memset(sha256_digit_, 0, SHA256_DIGEST_LENGTH * sizeof(unsigned char));
+RC Revision::Get(string_view key, std::string &value) {
+  RC rc = NOT_FOUND;
+  for (int i = 0; i < 5 && rc == NOT_FOUND; ++i) {
+    if (levels_[i].Empty()) continue;
+    rc = levels_[i].Get(key, value);
+  }
+  return rc;
 }
 
 }  // namespace adl

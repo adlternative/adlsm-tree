@@ -162,17 +162,32 @@ RC DB::Get(string_view key, std::string &value) {
   unique_lock<mutex> lock(mutex_);
   auto mem = mem_;
   auto imem = imem_;
+  auto current_rev = current_rev_;
+
   // int64_t sequence_id_ = INT64_MAX;
   lock.unlock();
   /* 1. memtable */
   rc = mem->Get(key, value);
-  if (!rc) return rc;
+  if (!rc) {
+    MLog->debug("Get key {} hint in memtable", key);
+    return rc;
+  }
   /* 2. imemtable */
   if (imem) {
     rc = imem->GetNoLock(key, value);
-    if (!rc) return rc;
+    if (!rc) {
+      MLog->debug("Get key {} hint in imemtable", key);
+      return rc;
+    }
   }
+
   /* 3 L0 sstable | L1-LN sstable 需要依赖于版本控制 元数据管理 */
+  rc = current_rev->Get(key, value);
+  if (!rc) {
+    MLog->debug("Get key {} hint in current rev {}", key,
+                current_rev_->GetOid());
+    return rc;
+  }
   /* 4. 读是否需要更新元数据？ */
   return NOT_FOUND;
 }

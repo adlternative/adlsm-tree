@@ -1,5 +1,6 @@
 #include "../src/db.hpp"
 #include <gtest/gtest.h>
+#include "../src/defer.hpp"
 using namespace adl;
 
 TEST(db, test_db_create) {
@@ -51,42 +52,44 @@ TEST(db, test_db_write2) {
   delete db;
 }
 
-#ifdef TEST_1
-TEST(db, test_db_put_get) {
+TEST(db, test_db_put_get1) {
   using namespace adl;
   DB *db = nullptr;
   DBOptions opts;
   string dbname = "/tmp/adl-testdb1";
   opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
   ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
 
-  for (int i = 0; i < 10000; i++) {
+  defer _([&]() {
+    if (db) delete db;
+  });
+  for (int i = 0; i < 10; i++) {
     string key = "key" + to_string(i);
     string val = "value" + to_string(i);
     ASSERT_EQ(db->Put(key, val), OK) << "put error";
   }
 
-  for (int i = 0; i < 10000; i++) {
+  for (int i = 0; i < 10; i++) {
     string key = "key" + to_string(i);
     string val;
     ASSERT_EQ(db->Get(key, val), OK) << "get error";
     ASSERT_EQ(val, "value" + to_string(i));
   }
 
-  for (int i = 0; i < 10000; i++) {
+  for (int i = 0; i < 10; i++) {
     string key = "key" + to_string(i);
     ASSERT_EQ(db->Delete(key), OK) << "delete error";
   }
-  for (int i = 0; i < 10000; i++) {
+  for (int i = 0; i < 10; i++) {
     string key = "key" + to_string(i);
     string val;
-    ASSERT_EQ(db->Get(key, val), NOT_FOUND) << "get ?";
+    ASSERT_EQ(db->Get(key, val), NOT_FOUND)
+        << "get " << val << "is bug (batch " << i << ")";
   }
 
   ASSERT_EQ(db->Close(), OK);
-  delete db;
 }
-#endif
 
 TEST(db, test_current_create) {
   DB *db = nullptr;

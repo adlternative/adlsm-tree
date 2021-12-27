@@ -10,8 +10,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <filesystem>
+#include "defer.hpp"
 #include "monitor_logger.hpp"
 #include "rc.hpp"
+#include "sstable.hpp"
 #include "wal.hpp"
 
 namespace adl {
@@ -505,6 +507,25 @@ RC RandomAccessFile::Read(size_t offset, size_t len, string_view &buffer,
 
 RandomAccessFile::~RandomAccessFile() {
   if (fd_ != -1) close(fd_);
+}
+
+RC FileMetaData::Get(string_view key, std::string &value) {
+  RC rc = OK;
+  SSTableReader *sstable = nullptr;
+  MmapReadAbleFile *sst_file = nullptr;
+  rc = FileManager::OpenMmapReadAbleFile(sstable_path, &sst_file);
+  rc = SSTableReader::Open(sst_file, &sstable);
+  defer def([&]() {
+    if (rc) {
+      MLog->error("open sstable {} failed", sstable_path);
+    }
+    if (sst_file) delete sst_file;
+    if (sstable) delete sstable;
+  });
+
+  string inner_key = NewMinInnerKey(key);
+  rc = sstable->Get(inner_key, value);
+  return rc;
 }
 
 RC FileManager::GetFileSize(string_view path, size_t *size) {

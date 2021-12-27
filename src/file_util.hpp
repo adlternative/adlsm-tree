@@ -157,6 +157,7 @@ struct FileMetaData {
   bool operator<(const FileMetaData &f) {
     return min_inner_key < f.min_inner_key;
   }
+  RC Get(string_view key, std::string &value);
 };
 
 ssize_t write_n(int fd, const char *buf, size_t len);
