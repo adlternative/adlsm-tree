@@ -1,5 +1,6 @@
 #include "revision.hpp"
 #include <fmt/core.h>
+#include <fmt/ostream.h>
 #include <fstream>
 #include <sstream>
 #include "defer.hpp"
@@ -84,11 +85,8 @@ RC Level::BuildFile(string_view dbname) {
     string file_oid = sha256_digit_to_hex(file->sha256);
 
     MLog->debug("num_keys: {}", num_keys);
-
-    MLog->debug("min_inner_key: {}, min_inner_key_size: {}", min_inner_key,
-                min_inner_key_size);
-    MLog->debug("max_inner_key: {}, max_inner_key_size: {}", max_inner_key,
-                max_inner_key_size);
+    MLog->debug("min_inner_key: {}", file->min_inner_key);
+    MLog->debug("max_inner_key: {}", file->max_inner_key);
 
     temp_level_file->Append({(char *)&num_keys, sizeof(int)});
     SHA256_Update(&sha256_, (char *)&num_keys, sizeof(int));
@@ -236,14 +234,25 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
 }
 
 RC Level::Get(string_view key, string &value) {
-  RC rc = OK;
+  RC rc = NOT_FOUND;
   if (level_) return UN_IMPLEMENTED;
   MemKey mk = MemKey::NewMinMemKey(key);
+  if (!files_meta_.size()) {
+    MLog->debug("not file in level {}?", GetOid());
+    return rc;
+  }
+  MLog->debug("{} file in level {}", files_meta_.size(), GetOid());
 
   for (auto &file_meta : files_meta_) {
-    if (mk < file_meta->min_inner_key) continue;
+    if (mk < file_meta->min_inner_key &&
+        mk.user_key_ != file_meta->min_inner_key.user_key_)
+      continue;
     if (file_meta->max_inner_key < mk) continue;
-    if (rc = file_meta->Get(key, value); rc) return rc;
+    rc = file_meta->Get(key, value);
+    if (rc == NOT_FOUND) {
+      MLog->debug("Get key {} from file {} miss", key, file_meta->sstable_path);
+      continue;
+    }
     return rc;
   }
   return rc;
@@ -338,6 +347,7 @@ RC Revision::Get(string_view key, std::string &value) {
   for (int i = 0; i < 5 && rc == NOT_FOUND; ++i) {
     if (levels_[i].Empty()) continue;
     rc = levels_[i].Get(key, value);
+    if (rc == NOT_FOUND) MLog->debug("Get key {} level {} miss", key, i);
   }
   return rc;
 }

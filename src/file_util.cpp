@@ -524,8 +524,7 @@ RC FileMetaData::Get(string_view key, std::string &value) {
   });
 
   string inner_key = NewMinInnerKey(key);
-  rc = sstable->Get(inner_key, value);
-  return rc;
+  return sstable->Get(inner_key, value);
 }
 
 RC FileManager::GetFileSize(string_view path, size_t *size) {

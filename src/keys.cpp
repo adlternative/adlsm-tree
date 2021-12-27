@@ -1,4 +1,5 @@
 #include "keys.hpp"
+#include <fmt/format.h>
 #include <string.h>
 #include "encode.hpp"
 namespace adl {
@@ -31,6 +32,11 @@ RC SaveResultValueIfUserKeyMatch(string_view rk, string_view rv, string_view tk,
 
 MemKey::MemKey(string_view str, int64_t seq, OpType op_type)
     : user_key_(str), seq_(seq), op_type_(op_type) {}
+
+ostream &operator<<(ostream &os, const MemKey &key) {
+  return os << fmt::format("{} {} {}", key.user_key_, key.seq_,
+                           key.op_type_ ? "OP_DELETE" : "OP_PUT");
+}
 
 int64_t InnerKeySeq(string_view inner_key) {
   int64_t seq;

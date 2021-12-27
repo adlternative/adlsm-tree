@@ -184,7 +184,7 @@ RC DB::Get(string_view key, std::string &value) {
   /* 3 L0 sstable | L1-LN sstable 需要依赖于版本控制 元数据管理 */
   rc = current_rev->Get(key, value);
   if (!rc) {
-    MLog->debug("Get key {} hint in current rev {}", key,
+    MLog->debug("Get key {} value {} hint in current rev {}", key, value,
                 current_rev_->GetOid());
     return rc;
   }
