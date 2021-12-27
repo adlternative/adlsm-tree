@@ -2,6 +2,7 @@
 #define ADL_LSM_TREE_REVISION_H__
 
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <set>
 #include <string>
@@ -22,7 +23,6 @@ class Object {
 
  private:
 };
-
 
 struct FileMetaDataCompare {
   using is_transparent = void;
@@ -82,6 +82,12 @@ class Level {
   RC BuildFile(string_view dbname);
   RC LoadFromFile(string_view dbname, string_view lvl_sha_hex);
   bool HaveCheckSum() const;
+  int64_t GetMaxSeq() {
+    if (files_meta_.empty()) return 0;
+    auto back = files_meta_.end();
+    back--;
+    return back->get()->max_inner_key.seq_;
+  }
 
  private:
   /* checksum */
@@ -97,8 +103,6 @@ class Level {
  * @brief Revision 版本对象
   Revisions Format:
 
-  | revision wal seq number |
-  |          3             |
   | LEVEL | SHA            |
   | ----- | ------------- |
   | 1     | `<level-sha>` |
@@ -111,14 +115,24 @@ class Level {
 class Revision {
  public:
   Revision();
-  Revision(vector<Level> &&levels) noexcept;
+  Revision(vector<Level> &&levels, deque<int64_t> &&log_nums_) noexcept;
   string GetOid() const;
   RC BuildFile(string_view dbname);
   const vector<Level> &GetLevels();
   void SetLevel(int level, Level *v);
-  void SetSeq(int64_t seq);
-  int64_t GetSeq() { return seq_; }
+  // void SetSeq(int64_t seq);
+  // int64_t GetSeq() { return seq_; }
   RC LoadFromFile(string_view dbname, string_view rev_sha_hex);
+
+  void PushLogNumber(int64_t num) { log_nums_.push_back(num); }
+  void PopLogNumber() { log_nums_.pop_front(); }
+  const deque<int64_t> &GetLogNumbers() const { return log_nums_; }
+  int64_t GetMaxSeq() {
+    int64_t maxseq = 0;
+    for (int i = 0; i < levels_.size(); i++)
+      maxseq = max(maxseq, levels_[i].GetMaxSeq());
+    return maxseq;
+  }
 
  private:
   /* checksum */
@@ -126,7 +140,10 @@ class Revision {
   unsigned char sha256_digit_[SHA256_DIGEST_LENGTH];
   /* 层级 */
   vector<Level> levels_;
-  int64_t seq_;
+  // int64_t seq_;
+
+  /* 不需要持久化到 revsion file;而是持久化到 current file */
+  deque<int64_t> log_nums_;
 };
 
 }  // namespace adl

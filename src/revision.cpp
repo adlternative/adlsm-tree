@@ -227,12 +227,10 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
   return rc;
 }
 
-Revision::Revision(vector<Level> &&levels) noexcept
-    : levels_(std::move(levels)) {}
+Revision::Revision(vector<Level> &&levels, deque<int64_t> &&log_nums) noexcept
+    : levels_(std::move(levels)), log_nums_(std::move(log_nums)) {}
 
 const vector<Level> &Revision::GetLevels() { return levels_; }
-
-void Revision::SetSeq(int64_t seq) { seq_ = seq; }
 
 RC Revision::BuildFile(string_view dbname) {
   /* seq write file */
@@ -242,10 +240,6 @@ RC Revision::BuildFile(string_view dbname) {
   if (rc) return rc;
 
   SHA256_Init(&sha256_);
-  /* seq */
-  string write_buffer = fmt::format("{}\n", seq_);
-  SHA256_Update(&sha256_, write_buffer.c_str(), write_buffer.size());
-  temp_rev_file->Append(write_buffer);
   /* levels */
   for (const auto &level : levels_) {
     if (level.Empty()) continue;
@@ -278,19 +272,6 @@ RC Revision::LoadFromFile(string_view dbname, string_view rev_sha_hex) {
     return NOT_FOUND;
   }
 
-  /* WAL seq number */
-  if (rev_file.good()) {
-    string line;
-    getline(rev_file, line);
-    if (line.empty()) {
-      MLog->error("rev file {} is empty", rev_file_path);
-      rev_file.close();
-      return BAD_REVISION;
-    }
-    int seq;
-    stringstream ss(line);
-    ss >> seq;
-  }
   /* level + oid */
   while (rev_file.good()) {
     string line;
@@ -319,7 +300,7 @@ string Revision::GetOid() const {
   return sha256_hex;
 }
 
-Revision::Revision() : seq_(0), levels_(5) {
+Revision::Revision() : /* seq_(0), */ levels_(5) {
   for (int i = 0; i < 5; ++i) levels_[i].SetLevel(i);
 }
 

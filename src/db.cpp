@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include "defer.hpp"
 #include "file_util.hpp"
 #include "mem_table.hpp"
@@ -16,6 +17,7 @@ namespace adl {
 DB::DB(string_view dbname, DBOptions &options)
     : dbname_(dbname),
       sequence_id_(0),
+      log_number_(0),
       options_(&options),
       mem_(nullptr),
       imem_(nullptr),
@@ -27,7 +29,7 @@ DB::DB(string_view dbname, DBOptions &options)
   MLogger.SetDbNameAndOptions(dbname_, &options);
   for (int i = 0; i < options_->background_workers_number; i++)
     workers_.push_back(Worker::NewBackgroundWorker());
-  MLog->info("DB {} have created", dbname_);
+  MLog->info("DB will run in {}", dbname_);
 }
 
 DB::~DB() {
@@ -57,16 +59,16 @@ RC DB::Open(string_view dbname, DBOptions &options, DB **dbptr) {
 
   /* load metadata... (current_rev) */
   if (rc = db->LoadMetaData(); rc) return rc;
-  /* init memtable if need */
   if (!db->mem_) {
+    /* init memtable */
     WAL *wal = nullptr;
-    rc =
-        FileManager::OpenWAL(dbname, db->current_rev_->GetOid(),
-                             db->sequence_id_.load(memory_order_relaxed), &wal);
+    int64_t log_number = db->log_number_.fetch_add(1, memory_order_relaxed);
+    rc = FileManager::OpenWAL(dbname, log_number, &wal);
     if (rc) return rc;
+    db->current_rev_->PushLogNumber(log_number);
     db->mem_ = make_shared<MemTable>(*db->options_, wal);
+    db->WriteCurrentRev(&*db->current_rev_);
   }
-
   *dbptr = db;
   return OK;
 }
@@ -110,18 +112,15 @@ RC DB::Create(string_view dbname, DBOptions &options, DB **dbptr) {
     MLog->error("Create current rev file {} failed", dbname);
     return rc;
   }
-  /* 更新 current 引用 */
-  string write_buffer = db->current_rev_->GetOid();
-  write_buffer += '\n';
-  if (auto rc = db->WriteCurrentRev(write_buffer); rc) return rc;
-  MLog->info("DB init rev {}", db->current_rev_->GetOid());
   /* init memtable */
   WAL *wal = nullptr;
-  rc = FileManager::OpenWAL(dbname, db->current_rev_->GetOid(),
-                            db->sequence_id_.load(memory_order_relaxed), &wal);
+  int64_t log_number = db->log_number_.fetch_add(1, memory_order_relaxed);
+  rc = FileManager::OpenWAL(dbname, log_number, &wal);
   if (rc) return rc;
+  db->current_rev_->PushLogNumber(log_number);
   db->mem_ = make_shared<MemTable>(*db->options_, wal);
-
+  db->WriteCurrentRev(&*db->current_rev_);
+  MLog->info("DB init rev {}", db->current_rev_->GetOid());
   *dbptr = db;
   return rc;
 }
@@ -205,7 +204,9 @@ RC DB::CheckMemAndCompaction() {
     /* memtable 满了，如果 imem 非空 等待
     minor compaction 将 imem 置为空 */
     MLog->info("DB wait until imem empty");
-    while (imem_ && !save_backgound_rc_) background_work_done_cond_.wait(lock);
+    while (imem_ && !save_backgound_rc_ && !closed_)
+      background_work_done_cond_.wait(lock);
+    if (closed_) return OK;
     if (save_backgound_rc_) return save_backgound_rc_;
     MLog->info("DB wait imem empty ok");
     /* mem -> imem */
@@ -280,13 +281,21 @@ RC DB::BuildSSTable(const shared_ptr<adl::MemTable> &mem) {
   new_level.Insert(sstable_file_meta);
   /* 创建新层级对象文件 */
   if (auto rc = new_level.BuildFile(dbname_); rc) return rc;
+
+  /* 最旧的 wal 不需要了 */
+  deque<int64_t> new_log_nums = current_rev_->GetLogNumbers();
+  if (new_log_nums.size() < 1) return NOEXCEPT_SIZE;
+  new_log_nums.pop_front();
+
   /* 创建新版本对象文件 */
-  auto new_revision = new Revision(std::move(new_levels));
+  auto new_revision =
+      new Revision(std::move(new_levels), std::move(new_log_nums));
   defer de([&]() {
     if (rc) delete new_revision;
   });
 
   if (rc = new_revision->BuildFile(dbname_); rc) return rc;
+
   /* 更新 current 引用 */
   if (rc = UpdateCurrentRev(new_revision); rc) return rc;
   return OK;
@@ -296,14 +305,14 @@ RC DB::BuildSSTable(const shared_ptr<adl::MemTable> &mem) {
 /* 由于写 imem 和 mem 需要锁定 */
 RC DB::FreezeMemTable() {
   MLog->info("DB mem -> imem");
-
-  WAL *wal = nullptr;
-  RC rc = FileManager::OpenWAL(dbname_, current_rev_->GetOid(),
-                               sequence_id_.load(memory_order_relaxed), &wal);
-  if (rc) return rc;
-
   imem_ = mem_;
+  WAL *wal = nullptr;
+  int64_t log_number = log_number_.fetch_add(1, memory_order_relaxed);
+  auto rc = FileManager::OpenWAL(dbname_, log_number, &wal);
+  if (rc) return rc;
+  current_rev_->PushLogNumber(log_number);
   mem_ = make_shared<MemTable>(*options_, wal);
+  WriteCurrentRev(&*current_rev_);
   return OK;
 }
 
@@ -322,9 +331,7 @@ bool DB::NeedFreezeMemTable() {
 }
 
 RC DB::UpdateCurrentRev(Revision *rev) {
-  string write_buffer = rev->GetOid();
-  write_buffer += '\n';
-  WriteCurrentRev(write_buffer);
+  WriteCurrentRev(rev);
   MLog->info("DB update current rev from {} to {}", current_rev_->GetOid(),
              rev->GetOid());
   current_rev_.reset(rev);
@@ -337,41 +344,53 @@ RC DB::WriteCurrentRev(string_view write_buffer) {
   auto rc = FileManager::OpenTempFile(dbname_, "tmp_cur", &temp_current_file);
   if (rc) return rc;
   temp_current_file->Append(write_buffer);
+  temp_current_file->Sync();
   if (rc = temp_current_file->ReName(current_file_path); rc) return rc;
   if (rc = temp_current_file->Close(); rc) return rc;
-  MLog->info("rev {} write to CURRENT", write_buffer);
+  MLog->info("'{}' have been written to CURRENT", write_buffer);
   delete temp_current_file;
   return OK;
 }
 
-RC DB::LoadWALs() {
-  RC rc = OK;
-  vector<pair<string, int64_t>> wal_files;
-  /* 遍历目录 寻找当前版本的所有预写日志
-    e.g. db/wal/2f3d1a5...-101.wal */
-  FileManager::ReadDir(
-      WalDir(dbname_),
-      [&](string_view file_name) -> bool {
-        return file_name.starts_with(current_rev_->GetOid()) &&
-               file_name.ends_with(".wal");
-      },
-      [&](string_view file_name) {
-        int64_t seq;
-        ParseWalFile(file_name, seq);
-        wal_files.push_back(pair<string, int64_t>{file_name, seq});
-      });
+RC DB::WriteCurrentRev(Revision *rev) {
+  const auto &log_numbers = rev->GetLogNumbers();
+  string write_buffer = fmt::format("{} {}", rev->GetOid(), log_numbers.size());
+  for (int i = 0; i < log_numbers.size(); i++)
+    write_buffer += " " + to_string(log_numbers[i]);
+  write_buffer += '\n';
+  return WriteCurrentRev(write_buffer);
+}
 
-  /* 让文件按照 seq 从小到大排序 */
-  sort(wal_files.begin(), wal_files.end(),
-       [](const pair<string, int64_t> &lhs, const pair<string, int64_t> &rhs)
-           -> bool { return lhs.second < rhs.second; });
-  /* 加载 wal */
-  int wal_files_len = (int)wal_files.size();
-  for (int i = 0; i < wal_files_len; i++)
-    if (rc = LoadWAL(WalFile(WalDir(dbname_), current_rev_->GetOid(),
-                             wal_files[i].second));
-        rc)
-      return rc;
+RC DB::ParseCurrentRev(string_view current_file_data,
+                       string &current_rev_sha_hex, deque<int64_t> &log_nums) {
+  if (current_file_data.size() < 2 * SHA256_DIGEST_LENGTH + 1)
+    return BAD_CURRENT_FILE;
+  current_rev_sha_hex = current_file_data.substr(0, 2 * SHA256_DIGEST_LENGTH);
+  string log_num_str(current_file_data.substr(2 * SHA256_DIGEST_LENGTH + 1));
+  stringstream ss(log_num_str);
+  int log_nums_size;
+  ss >> log_nums_size;
+  for (int i = 0; i < log_nums_size; i++) {
+    int64_t log_num;
+    ss >> log_num;
+    log_nums.push_back(log_num);
+  }
+  return OK;
+}
+
+RC DB::LoadWALs(const deque<int64_t> &log_nums) {
+  RC rc = OK;
+  int log_nums_size = (int)log_nums.size();
+  if (!log_nums_size) MLog->info("No wal for loading");
+  MLog->info("there are {} wals", log_nums_size);
+
+  for (int i = 0; i < log_nums_size; i++) {
+    auto current_rev = current_rev_;
+    current_rev->PushLogNumber(log_nums[i]);
+    if (rc = LoadWAL(WalFile(WalDir(dbname_), log_nums[i])); rc) return rc;
+    current_rev->PopLogNumber();
+    log_number_ = log_nums[i] + 1;
+  }
   return rc;
 }
 
@@ -406,9 +425,6 @@ RC DB::LoadWAL(string_view wal_file_path) {
       if (rc) break;
       mem.reset();
     }
-    /* 更新 db.seq */
-    if (sequence_id_.load(memory_order_relaxed) < memkey.seq_)
-      sequence_id_.store(memkey.seq_, memory_order_relaxed);
   }
   if (rc && rc != FILE_EOF && rc != BAD_RECORD) {
     MLog->error("LoadWAL {} failed, rc = {}", wal_file_path, rc);
@@ -431,21 +447,29 @@ RC DB::LoadWAL(string_view wal_file_path) {
 RC DB::LoadMetaData() {
   // 1 load current file
   string current_rev_sha_hex;
+  string current_file_data;
   string current_file = CurrentFile(dbname_);
   if (!FileManager::Exists(current_file)) {
     return OK;
   }
-
-  if (auto rc =
-          FileManager::ReadFileToString(current_file, current_rev_sha_hex);
+  /* 读取 current  */
+  if (auto rc = FileManager::ReadFileToString(current_file, current_file_data);
       rc) {
     MLog->error("DB load current file failed: {}", strrc(rc));
     return rc;
   }
-  if (current_rev_sha_hex[current_rev_sha_hex.size() - 1] == '\n')
-    current_rev_sha_hex.pop_back();
+  if (current_file_data[current_file_data.size() - 1] == '\n')
+    current_file_data.pop_back();
 
-  MLog->info("DB load current file success");
+  deque<int64_t> log_nums;
+  /* 从 current 文件中解析 current rev oid + log numbers */
+  if (auto rc =
+          ParseCurrentRev(current_file_data, current_rev_sha_hex, log_nums);
+      rc)
+    return rc;
+
+  MLog->info("DB load current file success: oid:{}", current_rev_sha_hex);
+
   // 2 load current rev
   if (auto rc = current_rev_->LoadFromFile(dbname_, current_rev_sha_hex); rc) {
     MLog->error("DB load current rev {} failed: {}", current_rev_sha_hex,
@@ -454,7 +478,9 @@ RC DB::LoadMetaData() {
   }
 
   /* load current rev WAL */
-  LoadWALs();
+  if (auto rc = LoadWALs(log_nums); rc) return rc;
+
+  sequence_id_ = current_rev_->GetMaxSeq() + 1;
   return OK;
 }
 

@@ -182,7 +182,8 @@ TEST(db, test_db_open) {
   DB *db = nullptr;
   DBOptions opts;
   string dbname = "/tmp/adl-testdb1";
-  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  auto rc = DB::Open(dbname, opts, &db);
+  ASSERT_EQ(rc, OK) << strrc(rc);
   ASSERT_EQ(db->Close(), OK);
   delete db;
 }

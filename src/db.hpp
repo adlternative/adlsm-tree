@@ -42,11 +42,14 @@ class DB {
   bool NeedCompactions();
   bool NeedFreezeMemTable();
 
+  // RC InitCurrentRev();
   RC UpdateCurrentRev(Revision *rev);
   RC WriteCurrentRev(string_view write_buffer);
-
+  RC WriteCurrentRev(Revision *rev);
+  RC ParseCurrentRev(string_view current_file_data, string &current_rev_sha_hex,
+                     deque<int64_t> &log_nums);
   RC LoadMetaData();
-  RC LoadWALs();
+  RC LoadWALs(const deque<int64_t> &log_nums);
   RC LoadWAL(string_view wal_file_path);
 
   /* memtables */
@@ -61,7 +64,6 @@ class DB {
   /* disk */
   string dbname_;
   DBOptions *options_;
-  /* metadata */
 
   /* thread sync */
   mutex mutex_;
@@ -71,8 +73,11 @@ class DB {
   vector<Worker *> workers_;
   RC save_backgound_rc_;
 
-  // MonitorLogger monitor_logger_;
+  /* current revision */
   shared_ptr<Revision> current_rev_;
+
+  /* wal */
+  std::atomic<int64_t> log_number_;
 };
 }  // namespace adl
 #endif  // ADL_LSM_TREE_DB_H__

@@ -35,6 +35,7 @@ class FileManager {
   static string FixDirName(string_view path);
   static string FixFileName(string_view path);
   static RC GetFileSize(string_view path, size_t *size);
+  static RC ReName(string_view old_path, string_view new_path);
 
   /* open */
   static RC OpenWritAbleFile(string_view filename, WritAbleFile **result);
@@ -50,10 +51,9 @@ class FileManager {
                                  RandomAccessFile **result);
   static RC ReadFileToString(string_view filename, string &result);
 
-  static RC OpenWAL(string_view dbname, string_view rev_oid, int64_t log_number,
-                    WAL **result);
-  static RC OpenWALReader(string_view dbname, string_view rev_oid,
-                          int64_t log_number, WALReader **result);
+  static RC OpenWAL(string_view dbname, int64_t log_number, WAL **result);
+  static RC OpenWALReader(string_view dbname, int64_t log_number,
+                          WALReader **result);
   static RC OpenWALReader(string_view wal_file_path, WALReader **result);
 
   static RC ReadDir(string_view directory_path, vector<string> &result);
@@ -171,7 +171,7 @@ string CurrentFile(string_view dbname);
 string SstDir(string_view dbname);
 string SstFile(string_view sst_dir, string_view sha256_hex);
 string WalDir(string_view dbname);
-string WalFile(string_view wal_dir, string_view rev_oid, int64_t log_number);
+string WalFile(string_view wal_dir, int64_t log_number);
 
 RC ParseWalFile(string_view filename, int64_t &seq);
 

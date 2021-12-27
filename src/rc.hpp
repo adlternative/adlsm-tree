@@ -33,6 +33,8 @@ enum RC {
   FILE_EOF,
   CHECK_SUM_ERROR,
   NOEXCEPT_SIZE,
+  BAD_FILE_PATH,
+  BAD_CURRENT_FILE,
 };
 
 inline std::string_view strrc(RC rc) {
@@ -89,6 +91,10 @@ inline std::string_view strrc(RC rc) {
       return "file eof";
     case NOEXCEPT_SIZE:
       return "noexcept size";
+    case BAD_FILE_PATH:
+      return "bad file path";
+    case BAD_CURRENT_FILE:
+      return "bad current file";
     default:
       return "unknown error";
   }

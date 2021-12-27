@@ -58,7 +58,7 @@ TEST(wal, add) {
   EXPECT_EQ(OK, FileManager::Create(db, DIR_));
   EXPECT_EQ(OK, FileManager::Create(waldir, DIR_));
 
-  auto rc = adl::FileManager::OpenWAL(db, oid, log_number, &wal);
+  auto rc = adl::FileManager::OpenWAL(db, log_number, &wal);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   vector<string> v{"adl", "is", "god"};
   for (int i = 0; i < v.size(); i++) wal->AddRecord(v[i]);
@@ -68,7 +68,7 @@ TEST(wal, add) {
   delete wal;
   MLog->info("write ok");
   WALReader *reader = nullptr;
-  rc = adl::FileManager::OpenWALReader(db, oid, log_number, &reader);
+  rc = adl::FileManager::OpenWALReader(db, log_number, &reader);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   string record;
   for (int i = 0; i < v.size(); i++) {
@@ -76,8 +76,7 @@ TEST(wal, add) {
     ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
     EXPECT_EQ(v[i], record);
   }
-
-  // delete reader;
+  delete reader;
 }
 
 TEST(wal, add_with_eof) {
@@ -91,7 +90,7 @@ TEST(wal, add_with_eof) {
   EXPECT_EQ(OK, FileManager::Create(db, DIR_));
   EXPECT_EQ(OK, FileManager::Create(waldir, DIR_));
 
-  auto rc = adl::FileManager::OpenWAL(db, oid, log_number, &wal);
+  auto rc = adl::FileManager::OpenWAL(db, log_number, &wal);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   vector<string> v{"adl", "is", "god"};
   for (int i = 0; i < v.size(); i++) wal->AddRecord(v[i]);
@@ -101,7 +100,7 @@ TEST(wal, add_with_eof) {
   delete wal;
   MLog->info("write ok");
   WALReader *reader = nullptr;
-  rc = adl::FileManager::OpenWALReader(db, oid, log_number, &reader);
+  rc = adl::FileManager::OpenWALReader(db, log_number, &reader);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   string record;
   vector<string> result;
@@ -130,7 +129,7 @@ TEST(wal, drop) {
   EXPECT_EQ(OK, FileManager::Create(db, DIR_));
   EXPECT_EQ(OK, FileManager::Create(waldir, DIR_));
 
-  auto rc = adl::FileManager::OpenWAL(db, oid, log_number, &wal);
+  auto rc = adl::FileManager::OpenWAL(db, log_number, &wal);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   vector<string> v{"adl", "is", "god"};
   for (int i = 0; i < v.size(); i++) wal->AddRecord(v[i]);
@@ -140,7 +139,7 @@ TEST(wal, drop) {
   delete wal;
   MLog->info("write ok");
   WALReader *reader = nullptr;
-  rc = adl::FileManager::OpenWALReader(db, oid, log_number, &reader);
+  rc = adl::FileManager::OpenWALReader(db, log_number, &reader);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   string record;
   vector<string> result;
@@ -157,7 +156,7 @@ TEST(wal, drop) {
   for (int i = 0; i < v.size(); i++) EXPECT_EQ(result[i], v[i]);
   reader->Drop();
   delete reader;
-  EXPECT_EQ(FileManager::Exists(WalFile(WalDir(db), oid, log_number)), false);
+  EXPECT_EQ(FileManager::Exists(WalFile(WalDir(db), log_number)), false);
 }
 
 class BadWAL : public WAL {
@@ -217,10 +216,9 @@ class BadWAL : public WAL {
   bool truncate_data_ = false;
 };
 
-RC OpenBadWAL(string_view dbname, string_view rev_oid, int64_t log_number,
-              BadWAL **result) {
+RC OpenBadWAL(string_view dbname, int64_t log_number, BadWAL **result) {
   /* open append only file for wal */
-  string wal_file_name = WalFile(WalDir(dbname), rev_oid, log_number);
+  string wal_file_name = WalFile(WalDir(dbname), log_number);
   MLog->info("wal_file_name: {}", wal_file_name);
 
   WritAbleFile *wal_file = nullptr;
@@ -242,7 +240,7 @@ TEST(wal, add_with_bad_record) {
   EXPECT_EQ(OK, FileManager::Create(db, DIR_));
   EXPECT_EQ(OK, FileManager::Create(waldir, DIR_));
 
-  auto rc = OpenBadWAL(db, oid, log_number, &wal);
+  auto rc = OpenBadWAL(db, log_number, &wal);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   wal->change_data_one_byte_ = true;
   vector<string> v{"adl", "is", "god"};
@@ -253,7 +251,7 @@ TEST(wal, add_with_bad_record) {
   delete wal;
   MLog->info("write ok");
   WALReader *reader = nullptr;
-  rc = adl::FileManager::OpenWALReader(db, oid, log_number, &reader);
+  rc = adl::FileManager::OpenWALReader(db, log_number, &reader);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   string record;
   vector<string> result;
@@ -261,6 +259,7 @@ TEST(wal, add_with_bad_record) {
   rc = reader->ReadRecord(record);
   EXPECT_EQ(rc, CHECK_SUM_ERROR) << strrc(rc) << std::endl;
   ASSERT_EQ(result.size(), 0);
+  delete reader;
 }
 
 TEST(wal, add_with_bad_record2) {
@@ -274,7 +273,7 @@ TEST(wal, add_with_bad_record2) {
   EXPECT_EQ(OK, FileManager::Create(db, DIR_));
   EXPECT_EQ(OK, FileManager::Create(waldir, DIR_));
 
-  auto rc = OpenBadWAL(db, oid, log_number, &wal);
+  auto rc = OpenBadWAL(db, log_number, &wal);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   wal->change_type_one_byte_ = true;
 
@@ -287,7 +286,7 @@ TEST(wal, add_with_bad_record2) {
   delete wal;
   MLog->info("write ok");
   WALReader *reader = nullptr;
-  rc = adl::FileManager::OpenWALReader(db, oid, log_number, &reader);
+  rc = adl::FileManager::OpenWALReader(db, log_number, &reader);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   string record;
   vector<string> result;
@@ -295,6 +294,7 @@ TEST(wal, add_with_bad_record2) {
   rc = reader->ReadRecord(record);
   EXPECT_EQ(rc, BAD_RECORD) << strrc(rc) << std::endl;
   ASSERT_EQ(result.size(), 0);
+  delete reader;
 }
 
 TEST(wal, add_with_bad_record3) {
@@ -308,7 +308,7 @@ TEST(wal, add_with_bad_record3) {
   EXPECT_EQ(OK, FileManager::Create(db, DIR_));
   EXPECT_EQ(OK, FileManager::Create(waldir, DIR_));
 
-  auto rc = OpenBadWAL(db, oid, log_number, &wal);
+  auto rc = OpenBadWAL(db, log_number, &wal);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   wal->add_len_ = true;
 
@@ -321,7 +321,7 @@ TEST(wal, add_with_bad_record3) {
   delete wal;
   MLog->info("write ok");
   WALReader *reader = nullptr;
-  rc = adl::FileManager::OpenWALReader(db, oid, log_number, &reader);
+  rc = adl::FileManager::OpenWALReader(db, log_number, &reader);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   string record;
   vector<string> result;
@@ -329,6 +329,7 @@ TEST(wal, add_with_bad_record3) {
   rc = reader->ReadRecord(record);
   EXPECT_EQ(rc, CHECK_SUM_ERROR) << strrc(rc) << std::endl;
   ASSERT_EQ(result.size(), 0);
+  delete reader;
 }
 
 TEST(wal, add_with_bad_record4) {
@@ -342,7 +343,7 @@ TEST(wal, add_with_bad_record4) {
   EXPECT_EQ(OK, FileManager::Create(db, DIR_));
   EXPECT_EQ(OK, FileManager::Create(waldir, DIR_));
 
-  auto rc = OpenBadWAL(db, oid, log_number, &wal);
+  auto rc = OpenBadWAL(db, log_number, &wal);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
 
   vector<string> v(100, "asdfghjkl;ertyuiop");
@@ -356,7 +357,7 @@ TEST(wal, add_with_bad_record4) {
   delete wal;
   MLog->info("write ok");
   WALReader *reader = nullptr;
-  rc = adl::FileManager::OpenWALReader(db, oid, log_number, &reader);
+  rc = adl::FileManager::OpenWALReader(db, log_number, &reader);
   ASSERT_EQ(rc, OK) << strrc(rc) << std::endl;
   string record;
   vector<string> result;

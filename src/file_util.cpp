@@ -336,7 +336,7 @@ RC TempFile::ReName(string_view new_file) {
                 true_path, strerror(errno));
     return RENAME_FILE_ERROR;
   }
-  MLog->info("tempfile name:{} rename to {}", file_path_, true_path);
+  // MLog->info("tempfile name:{} rename to {}", file_path_, true_path);
   return OK;
 }
 
@@ -356,15 +356,14 @@ RC TempFile::Open(string_view dir_path, string_view subfix, TempFile **result) {
       std::filesystem::read_symlink(std::filesystem::path("/proc/self/fd/") /
                                     std::to_string(fd))
           .string();
-  MLog->info("create new tempfile: {}", file_path);
+  // MLog->info("create new tempfile: {}", file_path);
   *result = new TempFile(file_path, fd);
   return OK;
 }
 
-RC FileManager::OpenWAL(string_view dbname, string_view rev_oid,
-                        int64_t log_number, WAL **result) {
+RC FileManager::OpenWAL(string_view dbname, int64_t log_number, WAL **result) {
   /* open append only file for wal */
-  string wal_file_name = WalFile(WalDir(dbname), rev_oid, log_number);
+  string wal_file_name = WalFile(WalDir(dbname), log_number);
   WritAbleFile *wal_file = nullptr;
 
   if (auto rc = OpenAppendOnlyFile(wal_file_name, &wal_file); rc) {
@@ -376,10 +375,10 @@ RC FileManager::OpenWAL(string_view dbname, string_view rev_oid,
   return OK;
 }
 
-RC FileManager::OpenWALReader(string_view dbname, string_view rev_oid,
-                              int64_t log_number, WALReader **result) {
+RC FileManager::OpenWALReader(string_view dbname, int64_t log_number,
+                              WALReader **result) {
   /* open append only file for wal */
-  return OpenWALReader(WalFile(WalDir(dbname), rev_oid, log_number), result);
+  return OpenWALReader(WalFile(WalDir(dbname), log_number), result);
 }
 
 RC FileManager::OpenWALReader(string_view wal_file_path, WALReader **result) {
@@ -519,6 +518,12 @@ RC FileManager::GetFileSize(string_view path, size_t *size) {
   return OK;
 }
 
+RC FileManager::ReName(string_view old_path, string_view new_path) {
+  int ret = rename(old_path.data(), new_path.data());
+  if (ret == -1) return RENAME_FILE_ERROR;
+  return OK;
+}
+
 string LevelDir(string_view dbname) {
   string level_dir(dbname);
   if (!dbname.ends_with("/")) level_dir += '/';
@@ -579,14 +584,13 @@ string WalDir(string_view dbname) {
   return wal_dir;
 }
 
-string WalFile(string_view wal_dir, string_view rev_oid, int64_t log_number) {
-  return fmt::format("{}{}-{}.wal", wal_dir, rev_oid, log_number);
+string WalFile(string_view wal_dir, int64_t log_number) {
+  return fmt::format("{}{}.wal", wal_dir, log_number);
 }
 
 RC ParseWalFile(string_view filename, int64_t &seq) {
-  std::istringstream iss(string(filename.substr(
-      SHA256_DIGEST_LENGTH * 2 + 1,
-      filename.length() - (SHA256_DIGEST_LENGTH * 2 + 1) - strlen(".wal"))));
+  std::istringstream iss(
+      string(filename.substr(0, filename.length() - strlen(".wal"))));
   iss >> seq;
   return OK;
 }
