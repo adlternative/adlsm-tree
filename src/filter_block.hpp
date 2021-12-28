@@ -68,7 +68,7 @@ class FilterBlockReader {
   int filters_offsets_offset_; /* 过滤器偏移量数组在块中的偏移量 */
   string_view filters_offsets_; /* 过滤器数组 */
   string_view filter_info_;     /* 过滤器信息 */
-  string filter_blocks_;        /*  整个过滤器块 */
+  string_view filter_blocks_;   /*  整个过滤器块 */
   unique_ptr<FilterAlgorithm> method_; /* 过滤器算法，目前只有 bloom-filter */
 };
 

@@ -50,9 +50,11 @@ OpType InnerKeyOpType(string_view inner_key) {
 }
 
 bool MemKey::operator<(const MemKey &other) const {
-  if (user_key_ < other.user_key_)
+  int cmp = user_key_.compare(other.user_key_);
+
+  if (cmp < 0)
     return true;
-  else if (user_key_ == other.user_key_) {
+  else if (!cmp) {
     if (seq_ > other.seq_)
       return true;
     else if (seq_ == other.seq_) {
