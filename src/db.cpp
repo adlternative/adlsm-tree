@@ -204,8 +204,10 @@ RC DB::Write(string_view key, string_view value, OpType op) {
   }
 
   /* write memtable and wal */
-  MemKey mem_key(key, sequence_id_.fetch_add(1), op);
-  return mem_->PutTeeWAL(mem_key, value);
+  MemKey mem_key(key, sequence_id_.fetch_add(1, memory_order_relaxed), op);
+  auto mem = mem_;
+  lock.unlock();
+  return mem->PutTeeWAL(mem_key, value);
 }
 
 /* 由于读 imem_ 需要锁定 */
