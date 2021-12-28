@@ -3,9 +3,9 @@
 3. monitor-log (spdlog) [√]
 4. sst_table [√]
 5. major compaction
-6. version control [WIP]
-7. write ahead log [WIP]
+6. version control [√]
+7. write ahead log [√]
 8. cache
-9. tcmalloc/jemalloc
-10. multi-thread [√]
-11. transaction
+9. multi-thread [√]
+10. transaction
+11. blob
