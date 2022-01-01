@@ -12,6 +12,11 @@
 
 namespace adl {
 
+string Object::GetOid() const {
+  string sha256_hex = sha256_digit_to_hex(sha256_digit_);
+  return sha256_hex;
+}
+
 Level::Level(int level, const string_view &oid) : level_(level) {
   hex_to_sha256_digit(oid, sha256_digit_);
 }
@@ -21,8 +26,9 @@ Level::Level() : level_(-1) {
 }
 
 Level::Level(const Level &rhs)
-    : level_(rhs.level_), files_meta_(rhs.files_meta_), sha256_(rhs.sha256_) {
+    : level_(rhs.level_), files_meta_(rhs.files_meta_) {
   memcpy(&sha256_digit_, &rhs.sha256_digit_, SHA256_DIGEST_LENGTH);
+  memcpy(&sha256_, &rhs.sha256_, sizeof(SHA256_CTX));
 }
 
 Level &Level::operator=(Level &rhs) {
@@ -50,11 +56,6 @@ bool Level::HaveCheckSum() const {
     if (sha256_digit_[i] != 0) return true;
   }
   return false;
-}
-
-string Level::GetOid() const {
-  string sha256_hex = sha256_digit_to_hex(sha256_digit_);
-  return sha256_hex;
 }
 
 int Level::GetLevel() const { return level_; }
@@ -331,11 +332,6 @@ RC Revision::LoadFromFile(string_view dbname, string_view rev_sha_hex) {
   }
   /* CHECK ? */
   return OK;
-}
-
-string Revision::GetOid() const {
-  string sha256_hex = sha256_digit_to_hex(sha256_digit_);
-  return sha256_hex;
 }
 
 Revision::Revision() : /* seq_(0), */ levels_(5) {

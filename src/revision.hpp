@@ -17,11 +17,17 @@ struct FileMetaData;
 class Object {
  public:
   Object() = default;
-  virtual ~Object();
-  virtual string GetOid() const = 0;
+  virtual ~Object() = default;
   virtual RC BuildFile(string_view dbname) = 0;
+  virtual RC LoadFromFile(string_view dbname, string_view sha_hex) = 0;
+  virtual RC Get(string_view key, string &value) = 0;
 
- private:
+  string GetOid() const;
+
+ protected:
+  /* checksum */
+  SHA256_CTX sha256_;
+  unsigned char sha256_digit_[SHA256_DIGEST_LENGTH];
 };
 
 struct FileMetaDataCompare {
@@ -66,30 +72,26 @@ struct FileMetaDataCompare {
   在 Major Compaction 发生时，L0.s1 L0.s2 L1.s3 L1.s4 通过检查 KEY 的 SEQ
  进行合并。
  */
-class Level {
+class Level : public Object {
  public:
   Level();
+  ~Level() = default;
   Level(const Level &);
   Level &operator=(Level &);
   Level(int level, const string_view &oid);
+  virtual RC BuildFile(string_view dbname) override;
+  virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
+  virtual RC Get(string_view key, std::string &value) override;
 
   void Insert(FileMetaData *file_meta);
   void Erase(FileMetaData *file_meta);
   bool Empty() const;
-  string GetOid() const;
   int GetLevel() const;
   void SetLevel(int level) { level_ = level; }
-  RC BuildFile(string_view dbname);
-  RC LoadFromFile(string_view dbname, string_view lvl_sha_hex);
   bool HaveCheckSum() const;
   int64_t GetMaxSeq();
 
-  RC Get(string_view key, string &value);
-
  private:
-  /* checksum */
-  SHA256_CTX sha256_;
-  unsigned char sha256_digit_[SHA256_DIGEST_LENGTH];
   /* 文件元数据 */
   set<shared_ptr<FileMetaData>, FileMetaDataCompare> files_meta_;
   /* 第几层 */
@@ -109,18 +111,17 @@ class Level {
   | 5     | `<level-sha>` |
 
  */
-class Revision {
+class Revision : public Object {
  public:
   Revision();
+  ~Revision() = default;
   Revision(vector<Level> &&levels, deque<int64_t> &&log_nums_) noexcept;
-  string GetOid() const;
-  RC BuildFile(string_view dbname);
+  virtual RC BuildFile(string_view dbname) override;
+  virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
+  virtual RC Get(string_view key, std::string &value) override;
+
   const vector<Level> &GetLevels();
   void SetLevel(int level, Level *v);
-  // void SetSeq(int64_t seq);
-  // int64_t GetSeq() { return seq_; }
-  RC LoadFromFile(string_view dbname, string_view rev_sha_hex);
-
   void PushLogNumber(int64_t num) { log_nums_.push_back(num); }
   void PopLogNumber() { log_nums_.pop_front(); }
   const deque<int64_t> &GetLogNumbers() const { return log_nums_; }
@@ -131,16 +132,9 @@ class Revision {
     return maxseq;
   }
 
-  RC Get(string_view key, std::string &value);
-
  private:
-  /* checksum */
-  SHA256_CTX sha256_;
-  unsigned char sha256_digit_[SHA256_DIGEST_LENGTH];
   /* 层级 */
   vector<Level> levels_;
-  // int64_t seq_;
-
   /* 不需要持久化到 revsion file;而是持久化到 current file */
   deque<int64_t> log_nums_;
 };
