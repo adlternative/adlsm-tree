@@ -103,9 +103,16 @@ add_executable(file_util_test
                test/file_util_test.cpp)
 target_link_libraries(file_util_test gtest gtest_main pthread spdlog fmt crc32c)
 
+# 缓存测试
+add_executable(cache_test
+               test/cache_test.cpp)
+target_link_libraries(cache_test gtest gtest_main pthread spdlog fmt)
+
+
 add_test(NAME mem_table_test COMMAND mem_table_test)
 add_test(NAME db_test COMMAND db_test)
 add_test(NAME block_test COMMAND block_test)
 add_test(NAME filter_block_test COMMAND filter_block_test)
 add_test(NAME sstable_test COMMAND sstable_test)
 add_test(NAME file_util_test COMMAND file_util_test)
+add_test(NAME cache_test COMMAND cache_test)
