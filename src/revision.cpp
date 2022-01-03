@@ -3,12 +3,14 @@
 #include <fmt/ostream.h>
 #include <fstream>
 #include <sstream>
+#include "db.hpp"
 #include "defer.hpp"
 #include "encode.hpp"
 #include "file_util.hpp"
 #include "hash_util.hpp"
 #include "monitor_logger.hpp"
 #include "rc.hpp"
+#include "sstable.hpp"
 
 namespace adl {
 
@@ -17,16 +19,17 @@ string Object::GetOid() const {
   return sha256_hex;
 }
 
-Level::Level(int level, const string_view &oid) : level_(level) {
+Level::Level(DB *db, int level, const string_view &oid)
+    : Object(db), level_(level) {
   hex_to_sha256_digit(oid, sha256_digit_);
 }
 
-Level::Level() : level_(-1) {
+Level::Level(DB *db) : Object(db), level_(-1) {
   memset(sha256_digit_, 0, SHA256_DIGEST_LENGTH * sizeof(unsigned char));
 }
 
 Level::Level(const Level &rhs)
-    : level_(rhs.level_), files_meta_(rhs.files_meta_) {
+    : Object(rhs.db_), level_(rhs.level_), files_meta_(rhs.files_meta_) {
   memcpy(&sha256_digit_, &rhs.sha256_digit_, SHA256_DIGEST_LENGTH);
   memcpy(&sha256_, &rhs.sha256_, sizeof(SHA256_CTX));
 }
@@ -36,6 +39,7 @@ Level &Level::operator=(Level &rhs) {
     level_ = rhs.level_;
     files_meta_ = rhs.files_meta_;
     sha256_ = rhs.sha256_;
+    db_ = rhs.db_;
     memcpy(&sha256_digit_, &rhs.sha256_digit_, SHA256_DIGEST_LENGTH);
   }
   return *this;
@@ -249,7 +253,31 @@ RC Level::Get(string_view key, string &value) {
         mk.user_key_ != file_meta->min_inner_key.user_key_)
       continue;
     if (file_meta->max_inner_key < mk) continue;
-    rc = file_meta->Get(key, value);
+
+    shared_ptr<SSTableReader> sstable;
+
+    if (!db_->table_cache_->Get(file_meta->sstable_path, sstable)) {
+      SSTableReader *sstable_reader = nullptr;
+      MmapReadAbleFile *sst_file = nullptr;
+      rc =
+          FileManager::OpenMmapReadAbleFile(file_meta->sstable_path, &sst_file);
+      if (rc) {
+        MLog->error("open sstable file {} failed", file_meta->sstable_path);
+        return rc;
+      }
+      /* sst_file 的拥有权从此归于 sstable_reader 所有 */
+      rc = SSTableReader::Open(sst_file, &sstable_reader);
+      if (rc) {
+        delete sst_file;
+        MLog->error("open sstable file {} failed", file_meta->sstable_path);
+        return rc;
+      }
+      sstable.reset(sstable_reader);
+      db_->table_cache_->Put(file_meta->sstable_path, sstable);
+    }
+
+    string inner_key = NewMinInnerKey(key);
+    rc = sstable->Get(inner_key, value);
     if (rc == NOT_FOUND) {
       MLog->debug("Get key {} from file {} miss", key, file_meta->sstable_path);
       continue;
@@ -266,8 +294,9 @@ int64_t Level::GetMaxSeq() {
   return back->get()->max_inner_key.seq_;
 }
 
-Revision::Revision(vector<Level> &&levels, deque<int64_t> &&log_nums) noexcept
-    : levels_(std::move(levels)), log_nums_(std::move(log_nums)) {}
+Revision::Revision(DB *db, vector<Level> &&levels,
+                   deque<int64_t> &&log_nums) noexcept
+    : Object(db), levels_(std::move(levels)), log_nums_(std::move(log_nums)) {}
 
 const vector<Level> &Revision::GetLevels() { return levels_; }
 
@@ -334,7 +363,7 @@ RC Revision::LoadFromFile(string_view dbname, string_view rev_sha_hex) {
   return OK;
 }
 
-Revision::Revision() : /* seq_(0), */ levels_(5) {
+Revision::Revision(DB *db) : Object(db), /* seq_(0), */ levels_(5, Level(db)) {
   for (int i = 0; i < 5; ++i) levels_[i].SetLevel(i);
 }
 

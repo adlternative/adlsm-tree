@@ -58,13 +58,13 @@ class SSTableWriter {
   string last_key_; /* 最后一次 add 的 key */
 };
 
-
 class SSTableReader {
  public:
   static RC Open(MmapReadAbleFile *file, SSTableReader **table);
   RC Get(string_view key, string &value);
 
   SSTableReader(MmapReadAbleFile *file);
+  ~SSTableReader();
 
  private:
   RC ReadFooterBlock();

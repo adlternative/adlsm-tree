@@ -23,13 +23,15 @@ DB::DB(string_view dbname, DBOptions &options)
       imem_(nullptr),
       closed_(false),
       is_compacting_(false),
-      current_rev_(make_shared<Revision>()),
-      save_backgound_rc_(OK) {
+      save_backgound_rc_(OK),
+      table_cache_(make_unique<
+                   LRUCache<string, shared_ptr<SSTableReader>, std::mutex>>()) {
   /* 后台工作者线程，目前只有一个线程 */
   MLogger.SetDbNameAndOptions(dbname_, &options);
   for (int i = 0; i < options_->background_workers_number; i++)
     workers_.push_back(Worker::NewBackgroundWorker());
   MLog->info("DB will run in {}", dbname_);
+  current_rev_ = make_shared<Revision>(this);
 }
 
 DB::~DB() {
@@ -185,7 +187,7 @@ RC DB::Get(string_view key, std::string &value) {
   rc = current_rev->Get(key, value);
   if (!rc) {
     MLog->debug("Get key {} value {} hint in current rev {}", key, value,
-                current_rev_->GetOid());
+                current_rev->GetOid());
     return rc;
   }
   /* 4. 读是否需要更新元数据？ */
@@ -306,7 +308,7 @@ RC DB::BuildSSTable(const shared_ptr<adl::MemTable> &mem) {
 
   /* 创建新版本对象文件 */
   auto new_revision =
-      new Revision(std::move(new_levels), std::move(new_log_nums));
+      new Revision(this, std::move(new_levels), std::move(new_log_nums));
   defer de([&]() {
     if (rc) delete new_revision;
   });

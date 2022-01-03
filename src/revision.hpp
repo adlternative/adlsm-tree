@@ -13,10 +13,11 @@ namespace adl {
 using namespace std;
 
 struct FileMetaData;
+class DB;
 
 class Object {
  public:
-  Object() = default;
+  Object(DB *db) : db_(db) {}
   virtual ~Object() = default;
   virtual RC BuildFile(string_view dbname) = 0;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) = 0;
@@ -25,6 +26,7 @@ class Object {
   string GetOid() const;
 
  protected:
+  DB *db_;
   /* checksum */
   SHA256_CTX sha256_;
   unsigned char sha256_digit_[SHA256_DIGEST_LENGTH];
@@ -74,11 +76,11 @@ struct FileMetaDataCompare {
  */
 class Level : public Object {
  public:
-  Level();
-  ~Level() = default;
+  Level(DB *db);
+  Level(DB *db, int level, const string_view &oid);
   Level(const Level &);
   Level &operator=(Level &);
-  Level(int level, const string_view &oid);
+  ~Level() = default;
   virtual RC BuildFile(string_view dbname) override;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
   virtual RC Get(string_view key, std::string &value) override;
@@ -113,9 +115,9 @@ class Level : public Object {
  */
 class Revision : public Object {
  public:
-  Revision();
+  Revision(DB *db);
+  Revision(DB *db, vector<Level> &&levels, deque<int64_t> &&log_nums_) noexcept;
   ~Revision() = default;
-  Revision(vector<Level> &&levels, deque<int64_t> &&log_nums_) noexcept;
   virtual RC BuildFile(string_view dbname) override;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
   virtual RC Get(string_view key, std::string &value) override;

@@ -5,14 +5,17 @@
 #include <condition_variable>
 #include <string>
 #include "back_ground_worker.hpp"
+#include "cache.hpp"
 #include "mem_table.hpp"
 #include "monitor_logger.hpp"
 #include "options.hpp"
 #include "rc.hpp"
+#include "sstable.hpp"
 
 namespace adl {
 
 class Revision;
+class Level;
 
 class DB {
  public:
@@ -78,6 +81,11 @@ class DB {
 
   /* wal */
   std::atomic<int64_t> log_number_;
+
+  /* cache */
+  unique_ptr<LRUCache<string, shared_ptr<SSTableReader>, std::mutex>> table_cache_;
+
+  friend class Level;
 };
 }  // namespace adl
 #endif  // ADL_LSM_TREE_DB_H__

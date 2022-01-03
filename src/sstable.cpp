@@ -249,4 +249,10 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
 SSTableReader::SSTableReader(MmapReadAbleFile *file)
     : file_(file), file_size_(file_->Size()) {}
 
+SSTableReader::~SSTableReader() {
+  if (file_) {
+    delete file_;
+  }
+}
+
 }  // namespace adl
