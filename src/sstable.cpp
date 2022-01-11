@@ -181,8 +181,9 @@ RC SSTableReader::ReadFilterBlock() {
   return OK;
 }
 
-RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table) {
-  SSTableReader *t = new SSTableReader(file);
+RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table,
+                       const string &oid, DB *db) {
+  SSTableReader *t = new SSTableReader(file, oid, db);
   RC rc = OK;
   /* read footer */
   if (rc = t->ReadFooterBlock(); rc) return rc;
@@ -227,29 +228,42 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
   MLog->info("Data Block Handle: off:{} size:{}",
              data_block_handle.block_offset_, data_block_handle.block_size_);
   string_view data_block_buffer;
-  if (rc = file_->Read(data_block_handle.block_offset_,
-                       data_block_handle.block_size_, data_block_buffer);
-      rc) {
-    MLog->error("Read data block buffer error: off:{} size:{}",
-                data_block_handle.block_offset_, data_block_handle.block_size_);
-    return rc;
+
+  BlockCacheHandle block_cache_handle;
+  block_cache_handle.oid_ = oid_;
+  block_cache_handle.offset_ = data_block_handle.block_offset_;
+
+  shared_ptr<BlockReader> data_block_reader;
+
+  /* read from block cache first; */
+  if (!db_ || !db_->block_cache_->Get(block_cache_handle, data_block_reader)) {
+    /* cache miss! read from file */
+    if (rc = file_->Read(data_block_handle.block_offset_,
+                         data_block_handle.block_size_, data_block_buffer);
+        rc) {
+      MLog->error("Read data block buffer error: off:{} size:{}",
+                  data_block_handle.block_offset_,
+                  data_block_handle.block_size_);
+      return rc;
+    }
+    data_block_reader = make_shared<BlockReader>();
+    if (rc = data_block_reader->Init(data_block_buffer, CmpInnerKey,
+                                     SaveResultValueIfUserKeyMatch);
+        rc) {
+      MLog->error("data_block_reader Init error: {}", strrc(rc));
+      return rc;
+    }
+    if (db_) db_->block_cache_->Put(block_cache_handle, data_block_reader);
   }
 
-  BlockReader data_block_reader;
-
-  if (rc = data_block_reader.Init(data_block_buffer, CmpInnerKey,
-                                  SaveResultValueIfUserKeyMatch);
-      rc) {
-    MLog->error("data_block_reader Init error: {}", strrc(rc));
-    return rc;
-  }
-  return data_block_reader.Get(inner_key, value);
+  /* read from data block */
+  return data_block_reader->Get(inner_key, value);
 }
 
 string SSTableReader::GetFileName() { return file_->GetFileName(); }
 
-SSTableReader::SSTableReader(MmapReadAbleFile *file)
-    : file_(file), file_size_(file_->Size()) {}
+SSTableReader::SSTableReader(MmapReadAbleFile *file, const string &oid, DB *db)
+    : file_(file), file_size_(file_->Size()), db_(db), oid_(oid) {}
 
 SSTableReader::~SSTableReader() {
   if (file_) {

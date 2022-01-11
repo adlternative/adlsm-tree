@@ -28,7 +28,7 @@ class SSTableWriter {
  private:
   RC FlushDataBlock();
 
-  static constexpr unsigned int need_flush_size_ = 4 * (1UL << 12);
+  static constexpr unsigned int need_flush_size_ = (1UL << 12); /* 4KB */
   string dbname_;
   WritAbleFile *file_;
 
@@ -58,14 +58,19 @@ class SSTableWriter {
   string last_key_; /* 最后一次 add 的 key */
 };
 
+class DB;
+
 class SSTableReader {
  public:
-  static RC Open(MmapReadAbleFile *file, SSTableReader **table);
+  static RC Open(MmapReadAbleFile *file, SSTableReader **table,
+                 const string &oid, DB *db = nullptr);
   RC Get(string_view key, string &value);
   string GetFileName();
 
-  SSTableReader(MmapReadAbleFile *file);
+  SSTableReader(MmapReadAbleFile *file, const string &oid, DB *db = nullptr);
   ~SSTableReader();
+  SSTableReader &operator=(const SSTableReader &) = delete;
+  SSTableReader(const SSTableReader &) = delete;
 
  private:
   RC ReadFooterBlock();
@@ -76,11 +81,14 @@ class SSTableReader {
 
   MmapReadAbleFile *file_;
   size_t file_size_;
+  string oid_;
 
   FilterBlockReader filter_block_reader_;
   BlockReader index_block_reader_;
   BlockReader meta_block_reader_;
   FooterBlockReader foot_block_reader_;
+
+  DB *db_;
 };
 
 }  // namespace adl

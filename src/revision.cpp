@@ -266,7 +266,7 @@ RC Level::Get(string_view key, string &value) {
         return rc;
       }
       /* sst_file 的拥有权从此归于 sstable_reader 所有 */
-      rc = SSTableReader::Open(sst_file, &sstable_reader);
+      rc = SSTableReader::Open(sst_file, &sstable_reader, oid, db_);
       if (rc) {
         delete sst_file;
         MLog->error("open sstable file {} failed", sstable_path);

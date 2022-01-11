@@ -83,9 +83,16 @@ class DB {
   std::atomic<int64_t> log_number_;
 
   /* cache */
-  unique_ptr<LRUCache<string, shared_ptr<SSTableReader>, std::mutex>> table_cache_;
+  unique_ptr<LRUCache<string, shared_ptr<SSTableReader>, std::mutex>>
+      table_cache_;
+
+  unique_ptr<LRUCache<BlockCacheHandle, shared_ptr<BlockReader>, std::mutex>>
+      block_cache_;
 
   friend class Level;
+  friend class Revision;
+  friend class SSTableReader;
 };
+
 }  // namespace adl
 #endif  // ADL_LSM_TREE_DB_H__

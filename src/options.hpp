@@ -24,7 +24,9 @@ struct DBOptions {
 
   /* MEMTABLE */
   /* 内存表最大大小，超过了则应该冻结内存表 */
-  size_t mem_table_max_size = 1UL << 22;
+  size_t mem_table_max_size = 1UL << 22; /* 4MB */
+
+  size_t block_cache_size = 1UL << 11; /* 2048 个 BLOCK */
 
   /* BACKGROUND */
   int background_workers_number = 1;

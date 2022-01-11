@@ -25,7 +25,11 @@ DB::DB(string_view dbname, DBOptions &options)
       is_compacting_(false),
       save_backgound_rc_(OK),
       table_cache_(make_unique<
-                   LRUCache<string, shared_ptr<SSTableReader>, std::mutex>>()) {
+                   LRUCache<string, shared_ptr<SSTableReader>, std::mutex>>()),
+      block_cache_(
+          make_unique<
+              LRUCache<BlockCacheHandle, shared_ptr<BlockReader>, std::mutex>>(
+              options.block_cache_size)) {
   /* 后台工作者线程，目前只有一个线程 */
   MLogger.SetDbNameAndOptions(dbname_, &options);
   for (int i = 0; i < options_->background_workers_number; i++)

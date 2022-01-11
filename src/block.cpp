@@ -128,7 +128,7 @@ RC BlockReader::GetInternal(
     Decode32(cur_entry + sizeof(int) * 2, &value_len);
     string cur_key;
     /* expect ok */
-    if (last_key.length() >= shared_key_len)
+    if (last_key.length() >= shared_key_len && shared_key_len)
       cur_key = last_key.substr(0, shared_key_len);
     cur_key.append(cur_entry + sizeof(int) * 3, (size_t)(unshared_key_len));
     int cmp = cmp_fn_(cur_key, inner_key);

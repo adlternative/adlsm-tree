@@ -72,6 +72,14 @@ struct BlockHandle {
   }
 };
 
+struct BlockCacheHandle {
+  string oid_;
+  int offset_;
+  bool operator==(const BlockCacheHandle &h) const {
+    return h.oid_ == oid_ && h.offset_ == offset_;
+  }
+};
+
 RC DecodeRestartsPointKeyWrap(const char *restart_record,
                               string_view &restarts_key);
 RC DecodeRestartsPointValueWrap(const char *restart_record,
@@ -87,5 +95,16 @@ RC DecodeRestartsPointKeyAndValueWrap(const char *restart_record,
                                       string_view &restarts_value);
 
 }  // namespace adl
+
+namespace std {
+template <>  // function-template-specialization
+class hash<adl::BlockCacheHandle> {
+ public:
+  size_t operator()(const adl::BlockCacheHandle &h) const {
+    return hash<string>()(h.oid_) ^ hash<int>()(h.offset_);
+  }
+};
+
+};  // namespace std
 
 #endif  // ADL_LSM_TREE_BLOCK_H__

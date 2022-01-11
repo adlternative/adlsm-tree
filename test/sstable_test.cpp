@@ -1,6 +1,7 @@
 #include "../src/sstable.hpp"
 #include <gtest/gtest.h>
 #include "../src/file_util.hpp"
+#include "../src/hash_util.hpp"
 #include "../src/mem_table.hpp"
 #include "../src/options.hpp"
 
@@ -99,9 +100,10 @@ TEST(sstable, sstable_reader) {
 
   BuildSSTable(dbname, &sstable_meta);
   string sstable_path = sstable_meta->GetSSTablePath(dbname);
+  string oid = sha256_digit_to_hex(sstable_meta->sha256);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
-  rc = SSTableReader::Open(file, &sstable);
+  rc = SSTableReader::Open(file, &sstable, oid);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   for (int i = 0; i < 10000; i++) {
     string key = "key" + to_string(i);
@@ -139,9 +141,11 @@ TEST(sstable, sstable_reader2) {
 
   BuildSSTable2(dbname, &sstable_meta);
   string sstable_path = sstable_meta->GetSSTablePath(dbname);
+  string oid = sha256_digit_to_hex(sstable_meta->sha256);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
-  rc = SSTableReader::Open(file, &sstable);
+  rc = SSTableReader::Open(file, &sstable, oid);
+
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   for (int i = 1; i < 10000 / 2; i++) {
     string key = "key" + to_string(i);
@@ -171,9 +175,10 @@ TEST(sstable, sstable_reader3) {
 
   BuildSSTable3(dbname, &sstable_meta);
   string sstable_path = sstable_meta->GetSSTablePath(dbname);
+  string oid = sha256_digit_to_hex(sstable_meta->sha256);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
-  rc = SSTableReader::Open(file, &sstable);
+  rc = SSTableReader::Open(file, &sstable, oid);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   for (int i = 0; i < 10000 / 2; i++) {
     string key = "key" + to_string(i);
@@ -198,9 +203,10 @@ TEST(sstable, sstable_reader4) {
 
   BuildSSTable4(dbname, &sstable_meta);
   string sstable_path = sstable_meta->GetSSTablePath(dbname);
+  string oid = sha256_digit_to_hex(sstable_meta->sha256);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
-  rc = SSTableReader::Open(file, &sstable);
+  rc = SSTableReader::Open(file, &sstable, oid);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   string key = "key";
   string val;
