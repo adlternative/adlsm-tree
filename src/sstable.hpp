@@ -62,6 +62,7 @@ class SSTableReader {
  public:
   static RC Open(MmapReadAbleFile *file, SSTableReader **table);
   RC Get(string_view key, string &value);
+  string GetFileName();
 
   SSTableReader(MmapReadAbleFile *file);
   ~SSTableReader();

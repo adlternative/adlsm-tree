@@ -246,6 +246,8 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
   return data_block_reader.Get(inner_key, value);
 }
 
+string SSTableReader::GetFileName() { return file_->GetFileName(); }
+
 SSTableReader::SSTableReader(MmapReadAbleFile *file)
     : file_(file), file_size_(file_->Size()) {}
 

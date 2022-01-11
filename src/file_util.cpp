@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <filesystem>
 #include "defer.hpp"
+#include "hash_util.hpp"
 #include "monitor_logger.hpp"
 #include "rc.hpp"
 #include "sstable.hpp"
@@ -507,6 +508,10 @@ RC RandomAccessFile::Read(size_t offset, size_t len, string_view &buffer,
 
 RandomAccessFile::~RandomAccessFile() {
   if (fd_ != -1) close(fd_);
+}
+
+string FileMetaData::GetSSTablePath(string_view dbname) {
+  return SstFile(SstDir(dbname), sha256_digit_to_hex(sha256));
 }
 
 RC FileManager::GetFileSize(string_view path, size_t *size) {

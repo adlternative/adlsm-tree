@@ -98,7 +98,7 @@ TEST(sstable, sstable_reader) {
   MmapReadAbleFile *file;
 
   BuildSSTable(dbname, &sstable_meta);
-  string sstable_path = sstable_meta->sstable_path;
+  string sstable_path = sstable_meta->GetSSTablePath(dbname);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
@@ -138,7 +138,7 @@ TEST(sstable, sstable_reader2) {
   MmapReadAbleFile *file;
 
   BuildSSTable2(dbname, &sstable_meta);
-  string sstable_path = sstable_meta->sstable_path;
+  string sstable_path = sstable_meta->GetSSTablePath(dbname);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
@@ -170,7 +170,7 @@ TEST(sstable, sstable_reader3) {
   MmapReadAbleFile *file;
 
   BuildSSTable3(dbname, &sstable_meta);
-  string sstable_path = sstable_meta->sstable_path;
+  string sstable_path = sstable_meta->GetSSTablePath(dbname);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);
@@ -197,7 +197,7 @@ TEST(sstable, sstable_reader4) {
   MmapReadAbleFile *file;
 
   BuildSSTable4(dbname, &sstable_meta);
-  string sstable_path = sstable_meta->sstable_path;
+  string sstable_path = sstable_meta->GetSSTablePath(dbname);
   auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
   ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
   rc = SSTableReader::Open(file, &sstable);

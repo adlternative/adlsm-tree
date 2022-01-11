@@ -120,6 +120,7 @@ class MmapReadAbleFile {
   ~MmapReadAbleFile();
   RC Read(size_t offset, size_t len, string_view &buffer);
   auto Size() { return file_size_; }
+  string GetFileName() { return file_name_; }
 
  private:
   char *base_addr_;
@@ -151,8 +152,10 @@ struct FileMetaData {
   int belong_to_level;
   MemKey max_inner_key;
   MemKey min_inner_key;
-  string sstable_path;
   unsigned char sha256[SHA256_DIGEST_LENGTH];
+
+  /* 获取在 db 中的 file 路径 */
+  string GetSSTablePath(string_view dbname);
 
   bool operator<(const FileMetaData &f) {
     return min_inner_key < f.min_inner_key;

@@ -217,20 +217,19 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
     }
 
     sha256_hex.assign(cur_pointer, sha256_hex_len);
+    cur_pointer += sha256_hex_len;
     MLog->debug("sha256_hex {}", sha256_hex);
 
-    cur_pointer += sha256_hex_len;
     FileMetaData *file_meta = new FileMetaData;
+    hex_to_sha256_digit(sha256_hex, file_meta->sha256);
     file_meta->belong_to_level = level_;
     file_meta->num_keys = num_keys;
     file_meta->min_inner_key.FromKey(min_key);
     file_meta->max_inner_key.FromKey(max_key);
-    file_meta->sstable_path = SstFile(SstDir(dbname), sha256_hex);
-    if (rc = FileManager::GetFileSize(file_meta->sstable_path,
+    if (rc = FileManager::GetFileSize(file_meta->GetSSTablePath(dbname),
                                       &file_meta->file_size);
         rc)
       return rc;
-    hex_to_sha256_digit(sha256_hex, file_meta->sha256);
 
     Insert(file_meta);
   }
@@ -257,21 +256,20 @@ RC Level::Get(string_view key, string &value) {
     shared_ptr<SSTableReader> sstable;
 
     string oid = sha256_digit_to_hex(file_meta->sha256);
-
     if (!db_->table_cache_->Get(oid, sstable)) {
+      string sstable_path = file_meta->GetSSTablePath(db_->dbname_);
       SSTableReader *sstable_reader = nullptr;
       MmapReadAbleFile *sst_file = nullptr;
-      rc =
-          FileManager::OpenMmapReadAbleFile(file_meta->sstable_path, &sst_file);
+      rc = FileManager::OpenMmapReadAbleFile(sstable_path, &sst_file);
       if (rc) {
-        MLog->error("open sstable file {} failed", file_meta->sstable_path);
+        MLog->error("open sstable file {} failed", sstable_path);
         return rc;
       }
       /* sst_file 的拥有权从此归于 sstable_reader 所有 */
       rc = SSTableReader::Open(sst_file, &sstable_reader);
       if (rc) {
         delete sst_file;
-        MLog->error("open sstable file {} failed", file_meta->sstable_path);
+        MLog->error("open sstable file {} failed", sstable_path);
         return rc;
       }
       sstable.reset(sstable_reader);
@@ -281,7 +279,7 @@ RC Level::Get(string_view key, string &value) {
     string inner_key = NewMinInnerKey(key);
     rc = sstable->Get(inner_key, value);
     if (rc == NOT_FOUND) {
-      MLog->debug("Get key {} from file {} miss", key, file_meta->sstable_path);
+      MLog->debug("Get key {} from file {} miss", key, sstable->GetFileName());
       continue;
     }
     return rc;

@@ -69,16 +69,16 @@ RC MemTable::BuildSSTable(string_view dbname,
       rc)
     return rc;
   if (rc = sstable->Final(meta_data->sha256); rc) return rc;
-  meta_data->sstable_path =
-      SstFile(SstDir(dbname), sha256_digit_to_hex(meta_data->sha256));
-  if (rc = temp_file->ReName(meta_data->sstable_path); rc) return rc;
-  if (rc = FileManager::GetFileSize(meta_data->sstable_path,
+  string sstable_path = meta_data->GetSSTablePath(dbname);
+
+  if (rc = temp_file->ReName(sstable_path); rc) return rc;
+  if (rc = FileManager::GetFileSize(sstable_path,
                                     &meta_data->file_size);
       rc)
     return rc;
   if (rc = temp_file->Close(); rc) return rc;
 
-  MLog->info("sstable {} created", meta_data->sstable_path);
+  MLog->info("sstable {} created", sstable_path);
   delete sstable;
   delete temp_file;
 
