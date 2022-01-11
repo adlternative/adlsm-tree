@@ -77,7 +77,7 @@ RC BlockReader::Init(
   handle_result_fn_ = std::move(handle_result);
   data_ = data;
   const char *buffer = data_.data();
-  size_t data_len = data.length();
+  size_t data_len = data_.length();
   /* restarts_len */
   int restarts_len;
   size_t restarts_len_offset = data_len - sizeof(int);

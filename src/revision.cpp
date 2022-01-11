@@ -256,7 +256,9 @@ RC Level::Get(string_view key, string &value) {
 
     shared_ptr<SSTableReader> sstable;
 
-    if (!db_->table_cache_->Get(file_meta->sstable_path, sstable)) {
+    string oid = sha256_digit_to_hex(file_meta->sha256);
+
+    if (!db_->table_cache_->Get(oid, sstable)) {
       SSTableReader *sstable_reader = nullptr;
       MmapReadAbleFile *sst_file = nullptr;
       rc =
@@ -273,9 +275,9 @@ RC Level::Get(string_view key, string &value) {
         return rc;
       }
       sstable.reset(sstable_reader);
-      db_->table_cache_->Put(file_meta->sstable_path, sstable);
+      db_->table_cache_->Put(oid, sstable);
     }
-
+    /* TODO(adl): use seq 实现 snapshot read */
     string inner_key = NewMinInnerKey(key);
     rc = sstable->Get(inner_key, value);
     if (rc == NOT_FOUND) {

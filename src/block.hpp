@@ -42,7 +42,7 @@ class BlockReader {
       string_view key,
       const std::function<RC(string_view, string_view)> &handle_result);
 
-  string data_;
+  string_view data_;
   /* 既是重启点数组的起点偏移量，也是数据项的结束偏移量 */
   size_t restarts_offset_;
   std::vector<int> restarts_;  //  重启点
