@@ -1,6 +1,5 @@
 #include "mem_table.hpp"
 #include <string.h>
-#include <mutex>
 #include "file_util.hpp"
 #include "hash_util.hpp"
 #include "monitor_logger.hpp"
@@ -8,7 +7,7 @@
 namespace adl {
 
 RC MemTable::Put(const MemKey &key, string_view value) {
-  lock_guard<mutex> lock(mu_);
+  lock_guard<shared_mutex> lock(mu_);
   if (key.op_type_ == OP_PUT)
     table_[key] = value;
   else if (key.op_type_ == OP_DELETE)
@@ -32,7 +31,7 @@ RC MemTable::PutTeeWAL(const MemKey &key, string_view value) {
 }
 
 RC MemTable::Get(string_view key, string &value) {
-  lock_guard<mutex> lock(mu_);
+  shared_lock<shared_mutex> lock(mu_);
   return GetNoLock(key, value);
 }
 
@@ -72,9 +71,7 @@ RC MemTable::BuildSSTable(string_view dbname,
   string sstable_path = meta_data->GetSSTablePath(dbname);
 
   if (rc = temp_file->ReName(sstable_path); rc) return rc;
-  if (rc = FileManager::GetFileSize(sstable_path,
-                                    &meta_data->file_size);
-      rc)
+  if (rc = FileManager::GetFileSize(sstable_path, &meta_data->file_size); rc)
     return rc;
   if (rc = temp_file->Close(); rc) return rc;
 
@@ -110,7 +107,7 @@ MemTable::MemTable(const DBOptions &options, WAL *wal)
     : options_(&options), wal_(wal) {}
 
 size_t MemTable::GetMemTableSize() {
-  lock_guard<mutex> lock(mu_);
+  shared_lock<shared_mutex> lock(mu_);
   return stat_.Sum();
 }
 

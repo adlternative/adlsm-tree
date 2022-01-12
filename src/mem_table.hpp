@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include "keys.hpp"
 #include "rc.hpp"
@@ -33,6 +34,9 @@ class MemTable {
 
   MemTable(const DBOptions &options);
   MemTable(const DBOptions &options, WAL *wal);
+  MemTable operator=(const MemTable &) = delete;
+  MemTable(const MemTable &) = delete;
+
   ~MemTable() {
     if (wal_) delete wal_;
   }
@@ -49,7 +53,7 @@ class MemTable {
   bool Empty();
 
  private:
-  mutable mutex mu_;
+  mutable shared_mutex mu_;
   const DBOptions *options_;
   map<MemKey, string> table_;
   Stat stat_; /* 整个内存表的状态 */
