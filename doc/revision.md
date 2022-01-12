@@ -2,14 +2,9 @@
 
 CURRENT Format:
 
-`revision-sha`
-
+`revision-sha n logs[0].id logs[1].id ... logs[n-1].id`
 
 Revisions Format:
-
-  | revision wal seq number |
-  | ----------------------- |
-  | 3                       |
 
   | LEVEL | SHA           |
   | ----- | ------------- |

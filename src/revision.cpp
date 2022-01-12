@@ -241,6 +241,8 @@ RC Level::Get(string_view key, string &value) {
   RC rc = NOT_FOUND;
   if (level_) return UN_IMPLEMENTED;
   MemKey mk = MemKey::NewMinMemKey(key);
+  string inner_key = mk.ToKey();
+
   if (!files_meta_.size()) {
     MLog->debug("not file in level {}?", GetOid());
     return rc;
@@ -276,7 +278,6 @@ RC Level::Get(string_view key, string &value) {
       db_->table_cache_->Put(oid, sstable);
     }
     /* TODO(adl): use seq 实现 snapshot read */
-    string inner_key = NewMinInnerKey(key);
     rc = sstable->Get(inner_key, value);
     if (rc == NOT_FOUND) {
       MLog->debug("Get key {} from file {} miss", key, sstable->GetFileName());

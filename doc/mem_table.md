@@ -26,5 +26,4 @@
 `Get("key3") -> (nil)`
 
 
-* 使用 `std::map` | `skipList`。
-
+* `adlsm-tree` 使用 `std::map` + `std::shared_mutex` 实现，性能可能不如 skiplist 但是实现简单。
