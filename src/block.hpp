@@ -1,17 +1,23 @@
 #ifndef ADL_LSM_TREE_BLOCK_H__
 #define ADL_LSM_TREE_BLOCK_H__
 
+#include <cassert>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
+#include "encode.hpp"
 #include "rc.hpp"
 
 namespace adl {
 using namespace std;
 
+#define RESTARTS_BLOCK_LEN 12
+/* 今日盛开的花，将在明日凋谢 */
+
 class BlockWriter {
  public:
-  static constexpr unsigned int restarts_block_len_ = 12;
   BlockWriter();
   RC Add(string_view key, string_view value);
   RC Final(string &result);
@@ -26,12 +32,83 @@ class BlockWriter {
   string buffer_;
 };
 
-class BlockReader {
+class BlockReader : public enable_shared_from_this<BlockReader> {
  public:
+  class Iterator {
+   public:
+    Iterator(shared_ptr<BlockReader> &&container, size_t restarts_block_idx = 0,
+             size_t entries_idx = 0);
+
+    Iterator &operator++();
+
+    Iterator operator++(int);
+
+    int operator<=>(Iterator &rhs) {
+      assert(container_ == rhs.container_);
+
+      if (cur_entry_ > rhs.cur_entry_)
+        return 1;
+      else if (cur_entry_ < rhs.cur_entry_)
+        return -1;
+      return 0;
+    }
+
+    Iterator &operator=(Iterator &rhs);
+
+    Iterator(Iterator &rhs);
+
+    Iterator &operator=(Iterator &&rhs) noexcept;
+
+    Iterator(Iterator &&rhs) noexcept;
+
+    bool operator==(Iterator &rhs) {
+      return container_ == rhs.container_ && cur_entry_ == rhs.cur_entry_;
+    }
+
+    bool operator!=(Iterator &rhs) { return *this != rhs; }
+
+    optional<pair<string, string>> operator*();
+
+    shared_ptr<BlockReader> GetContainer() { return container_; }
+    operator bool() {
+      if (!container_) return false;
+      if (*this >= container_->end()) return false;
+
+      return true;
+    }
+
+    Iterator()
+        : restarts_block_idx_(0),
+          entries_idx_(0),
+          value_len_(0),
+          unshared_key_len_(0),
+          shared_key_len_(0),
+          cur_entry_(nullptr) {}
+
+   private:
+    size_t restarts_block_idx_;
+    size_t entries_idx_;
+    shared_ptr<BlockReader> container_;
+
+    const char *cur_entry_;
+    string last_key_;
+    int value_len_;
+    int unshared_key_len_;
+    int shared_key_len_;
+  };
+  friend class Iterator;
+
+  Iterator begin() { return Iterator(shared_from_this(), 0, 0); }
+  Iterator end() {
+    { return Iterator(shared_from_this(), restarts_.size(), 0); }
+  }
+
   BlockReader() = default;
   RC Init(string_view data, std::function<int(string_view, string_view)> &&cmp,
           std::function<RC(string_view, string_view, string_view innner_key,
                            string &value)> &&handle_result);
+  std::optional<std::pair<string, const char *>> SeekWithIndex(
+      size_t restarts_block_idx, size_t entries_idx);
 
   /* 点查 */
   RC Get(string_view key, string &value);
@@ -42,7 +119,8 @@ class BlockReader {
       string_view key,
       const std::function<RC(string_view, string_view)> &handle_result);
 
-  string_view data_;
+  string_view data_;        /* [data][restarts] */
+  string_view data_buffer_; /* [data] */
   /* 既是重启点数组的起点偏移量，也是数据项的结束偏移量 */
   size_t restarts_offset_;
   std::vector<int> restarts_;  //  重启点
@@ -75,6 +153,10 @@ struct BlockHandle {
 struct BlockCacheHandle {
   string oid_;
   int offset_;
+  BlockCacheHandle() = default;
+  BlockCacheHandle(const string &oid, int offset)
+      : oid_(oid), offset_(offset) {}
+
   bool operator==(const BlockCacheHandle &h) const {
     return h.oid_ == oid_ && h.offset_ == offset_;
   }

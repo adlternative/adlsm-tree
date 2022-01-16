@@ -1,4 +1,5 @@
 #include "../src/block.hpp"
+#include <fmt/core.h>
 #include <gtest/gtest.h>
 #include "../src/keys.hpp"
 #include "../src/mem_table.hpp"
@@ -224,10 +225,11 @@ TEST(block_test, Get4) {
     MemKey mem_key(key, i, OP_PUT);
     mem_table.Put(mem_key, value);
   }
-  rc = mem_table.ForEachNoLock([&](const MemKey &memkey, string_view value) -> RC {
-    string key = memkey.ToKey();
-    return block.Add(key, value);
-  });
+  rc = mem_table.ForEachNoLock(
+      [&](const MemKey &memkey, string_view value) -> RC {
+        string key = memkey.ToKey();
+        return block.Add(key, value);
+      });
   ASSERT_EQ(rc, OK) << strrc(rc);
 
   block.Final(result);
@@ -277,5 +279,43 @@ TEST(block_test, Get4) {
     rc = block_reader.Get(inner_key, value);
     ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
     EXPECT_EQ(value, expect);
+  }
+}
+
+TEST(block_test, Iterator) {
+  using namespace adl;
+  BlockWriter block;
+  BlockReader block_reader;
+  map<string, string> m;
+  string result;
+  RC rc = OK;
+  vector<pair<string, string>> vk;
+  for (int i = 0; i < 120; i++) {
+    string key("key");
+    key += std::to_string(i);
+    string value("value");
+    value += std::to_string(i);
+    m.insert({key, value});
+    vk.push_back({key, value});
+  }
+  sort(vk.begin(), vk.end(),
+       [](pair<string, string> &l, pair<string, string> &r) -> bool {
+         return l.first < r.first;
+       });
+
+  for (auto &p : m) block.Add(p.first, p.second);
+
+  block.Final(result);
+  block.Reset();
+
+  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
+  int i = 0;
+  for (auto iter = block_reader.begin(); iter != block_reader.end();
+       iter++, i++) {
+    auto kv = *iter;
+    ASSERT_TRUE(kv);
+    // fmt::print("{} {}\n", kv->first, kv->second);
+    EXPECT_EQ(kv->first, vk[i].first);
+    EXPECT_EQ(kv->second, vk[i].second);
   }
 }

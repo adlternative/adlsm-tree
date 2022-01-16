@@ -21,7 +21,7 @@ RC BlockWriter::Add(string_view key, string_view value) {
   int shared_key_len = 0;
   int unshared_key_len;
 
-  if (!(entries_len_ % restarts_block_len_)) {
+  if (!(entries_len_ % RESTARTS_BLOCK_LEN)) {
     restarts_.push_back((int)buffer_.size());
   } else {
     auto min_len = std::min(key_len, (int)last_key_.length());
@@ -84,6 +84,8 @@ RC BlockReader::Init(
   Decode32(buffer + restarts_len_offset, &restarts_len);
   /* restarts */
   restarts_offset_ = restarts_len_offset - restarts_len * sizeof(int);
+  data_buffer_ = data.substr(0, restarts_offset_);
+
   for (int i = 0; i < restarts_len; i++) {
     int offset;
     Decode32(buffer + restarts_offset_ + i * sizeof(int), &offset);
@@ -92,6 +94,34 @@ RC BlockReader::Init(
   return OK;
 }
 
+std::optional<std::pair<string, const char *>> BlockReader::SeekWithIndex(
+    size_t restarts_block_idx, size_t entries_idx) {
+  if (restarts_block_idx == restarts_.size() ||
+      entries_idx >= RESTARTS_BLOCK_LEN)
+    return nullopt;
+
+  auto cur_entry = data_.data() + restarts_[restarts_block_idx];
+  string last_key;
+  int i;
+
+  for (i = 0; i < entries_idx && cur_entry < data_buffer_.end(); i++) {
+    int value_len;
+    int unshared_key_len;
+    int shared_key_len;
+    Decode32(cur_entry, &shared_key_len);
+    Decode32(cur_entry + sizeof(int), &unshared_key_len);
+    Decode32(cur_entry + sizeof(int) * 2, &value_len);
+    string cur_key;
+    /* expect ok */
+    if (last_key.length() >= shared_key_len && shared_key_len)
+      cur_key = last_key.substr(0, shared_key_len);
+    cur_key.append(cur_entry + sizeof(int) * 3, (size_t)(unshared_key_len));
+
+    cur_entry += sizeof(int) * 3 + unshared_key_len + value_len;
+    last_key = std::move(cur_key);
+  }
+  return make_pair(std::move(last_key), cur_entry);
+}
 /* 找到恰好大于等于 inner_key 的项执行 handle_result() */
 RC BlockReader::GetInternal(
     string_view inner_key,
@@ -117,9 +147,7 @@ RC BlockReader::GetInternal(
   string last_key;
   int i;
 
-  for (i = 0; i < BlockWriter::restarts_block_len_ &&
-              cur_entry < data_.data() + restarts_offset_;
-       i++) {
+  for (i = 0; i < RESTARTS_BLOCK_LEN && cur_entry < data_buffer_.end(); i++) {
     int value_len;
     int unshared_key_len;
     int shared_key_len;
@@ -144,8 +172,7 @@ RC BlockReader::GetInternal(
   }
 
   /* 还没有越界 我们检测下一个重启点 */
-  if (i == BlockWriter::restarts_block_len_ &&
-      cur_entry < data_.data() + restarts_offset_) {
+  if (i == RESTARTS_BLOCK_LEN && cur_entry < data_buffer_.end()) {
     string_view key;
     string_view val;
     if (rc = DecodeRestartsPointKeyAndValueWrap(cur_entry, key, val); rc)
@@ -156,6 +183,7 @@ RC BlockReader::GetInternal(
   return NOT_FOUND;
 }
 
+/* block 内部点查 */
 RC BlockReader::Get(string_view innner_key, string &value) {
   return GetInternal(
       innner_key, [&](string_view result_key, string_view result_value) -> RC {
@@ -241,6 +269,124 @@ RC BlockReader::BsearchRestartPoint(string_view key, int *index) {
 
   *index = right;
   return OK;
+}
+
+std::optional<pair<string, string>> BlockReader::Iterator::operator*() {
+  if (cur_entry_ >= container_->data_buffer_.end() ||
+      entries_idx_ >= RESTARTS_BLOCK_LEN ||
+      restarts_block_idx_ >= container_->restarts_.size())
+    return nullopt;
+
+  string cur_key;
+  string cur_value;
+  /* expect ok */
+  if (last_key_.length() >= shared_key_len_ && shared_key_len_)
+    cur_key = last_key_.substr(0, shared_key_len_);
+  cur_key.append(cur_entry_ + sizeof(int) * 3, (size_t)(unshared_key_len_));
+  cur_value.append(cur_entry_ + sizeof(int) * 3 + unshared_key_len_,
+                   (size_t)value_len_);
+
+  pair<string, string> ret = make_pair(cur_key, std::move(cur_value));
+  last_key_ = std::move(cur_key);
+  return ret;
+}
+BlockReader::Iterator::Iterator(Iterator &&rhs) noexcept
+    : container_(std::move(rhs.container_)),
+      restarts_block_idx_(rhs.restarts_block_idx_),
+      entries_idx_(rhs.entries_idx_),
+      cur_entry_(rhs.cur_entry_),
+      last_key_(std::move(rhs.last_key_)),
+      value_len_(rhs.value_len_),
+      unshared_key_len_(rhs.unshared_key_len_),
+      shared_key_len_(rhs.shared_key_len_) {}
+BlockReader::Iterator &BlockReader::Iterator::operator=(
+    Iterator &&rhs) noexcept {
+  if (&rhs != this) {
+    restarts_block_idx_ = rhs.restarts_block_idx_;
+    entries_idx_ = rhs.entries_idx_;
+    container_ = std::move(rhs.container_);
+    cur_entry_ = rhs.cur_entry_;
+    last_key_ = std::move(rhs.last_key_);
+    value_len_ = rhs.value_len_;
+    unshared_key_len_ = rhs.unshared_key_len_;
+    shared_key_len_ = rhs.shared_key_len_;
+  }
+  return *this;
+}
+BlockReader::Iterator::Iterator(Iterator &rhs)
+    : container_(rhs.container_),
+      restarts_block_idx_(rhs.restarts_block_idx_),
+      entries_idx_(rhs.entries_idx_),
+      cur_entry_(rhs.cur_entry_),
+      last_key_(rhs.last_key_),
+      value_len_(rhs.value_len_),
+      unshared_key_len_(rhs.unshared_key_len_),
+      shared_key_len_(rhs.shared_key_len_) {}
+BlockReader::Iterator &BlockReader::Iterator::operator=(Iterator &rhs) {
+  if (&rhs != this) {
+    restarts_block_idx_ = rhs.restarts_block_idx_;
+    entries_idx_ = rhs.entries_idx_;
+    container_ = rhs.container_;
+    cur_entry_ = rhs.cur_entry_;
+    last_key_ = rhs.last_key_;
+    value_len_ = rhs.value_len_;
+    unshared_key_len_ = rhs.unshared_key_len_;
+    shared_key_len_ = rhs.shared_key_len_;
+  }
+  return *this;
+}
+BlockReader::Iterator BlockReader::Iterator::operator++(int) {
+  Iterator tmp = *this;
+  this->operator++();
+  return tmp;
+}
+BlockReader::Iterator &BlockReader::Iterator::operator++() {
+  if (cur_entry_ >= container_->data_buffer_.end()) {
+    return *this;
+  }
+
+  if (entries_idx_ <= RESTARTS_BLOCK_LEN - 2)
+    entries_idx_++;
+  else if (entries_idx_ == RESTARTS_BLOCK_LEN - 1 &&
+           restarts_block_idx_ < container_->restarts_.size()) {
+    restarts_block_idx_++;
+    entries_idx_ = 0;
+  }
+
+  cur_entry_ += sizeof(int) * 3 + unshared_key_len_ + value_len_;
+
+  if (cur_entry_ >= container_->data_buffer_.end()) return *this;
+
+  Decode32(cur_entry_, &shared_key_len_);
+  Decode32(cur_entry_ + sizeof(int), &unshared_key_len_);
+  Decode32(cur_entry_ + sizeof(int) * 2, &value_len_);
+
+  return *this;
+}
+BlockReader::Iterator::Iterator(shared_ptr<BlockReader> &&container,
+                                size_t restarts_block_idx, size_t entries_idx)
+    : container_(std::move(container)),
+      restarts_block_idx_(restarts_block_idx),
+      entries_idx_(entries_idx) {
+  auto pa = container_->SeekWithIndex(restarts_block_idx, entries_idx);
+  if (pa) {
+    last_key_ = std::move(pa->first);
+    cur_entry_ = pa->second;
+    Decode32(cur_entry_, &shared_key_len_);
+    Decode32(cur_entry_ + sizeof(int), &unshared_key_len_);
+    Decode32(cur_entry_ + sizeof(int) * 2, &value_len_);
+  } else {
+    auto restarts_len = container_->restarts_.size();
+    cur_entry_ = container_->data_buffer_.end();
+
+    if (restarts_block_idx_ > restarts_len) restarts_block_idx_ = restarts_len;
+
+    if (entries_idx > RESTARTS_BLOCK_LEN) entries_idx = RESTARTS_BLOCK_LEN;
+
+    shared_key_len_ = 0;
+    unshared_key_len_ = 0;
+    value_len_ = 0;
+  }
 }
 
 }  // namespace adl

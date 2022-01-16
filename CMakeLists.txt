@@ -65,9 +65,10 @@ add_executable(block_test
                src/sstable.cpp
                src/hash_util.cpp
                src/keys.cpp
+               src/wal.cpp
                src/file_util.cpp
                test/block_test.cpp)
-target_link_libraries(block_test crypto gtest gtest_main pthread fmt spdlog)
+target_link_libraries(block_test crypto gtest gtest_main pthread fmt spdlog crc32c)
 
 # 过滤器块测试
 add_executable(filter_block_test
