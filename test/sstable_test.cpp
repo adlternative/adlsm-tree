@@ -1,4 +1,5 @@
 #include "../src/sstable.hpp"
+#include <fmt/ostream.h>
 #include <gtest/gtest.h>
 #include "../src/file_util.hpp"
 #include "../src/hash_util.hpp"
@@ -218,4 +219,38 @@ TEST(sstable, sstable_reader4) {
   delete sstable_meta;
   delete file;
   delete sstable;
+}
+
+TEST(sstable, Iterator) {
+  using namespace adl;
+  auto dbname = "/tmp/loserdb";
+  adl::FileMetaData *sstable_meta = nullptr;
+  SSTableReader *sstable;
+  shared_ptr<SSTableReader> sstable_reader;
+
+  MmapReadAbleFile *file;
+
+  BuildSSTable4(dbname, &sstable_meta);
+  string sstable_path = sstable_meta->GetSSTablePath(dbname);
+  string oid = sha256_digit_to_hex(sstable_meta->sha256);
+  auto rc = FileManager::OpenMmapReadAbleFile(sstable_path, &file);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  rc = SSTableReader::Open(file, &sstable, oid);
+  ASSERT_EQ(rc, OK) << "error: " << strrc(rc);
+  sstable_reader.reset(sstable);
+
+  int i = 0;
+  for (auto iter = sstable_reader->begin(); iter != sstable_reader->end();
+       iter++, i++) {
+    auto kv = *iter;
+    ASSERT_TRUE(kv);
+    MemKey memkey;
+    memkey.FromKey(kv->first);
+    EXPECT_EQ(
+        fmt::format("{} {}", memkey, kv->second),
+        fmt::format("key {} {} {}", 10000 - i, i % 2 ? "OP_DELETE" : "OP_PUT",
+                    i % 2 ? "" : "value" + to_string((10000 - i) / 2)));
+  }
+
+  delete sstable_meta;
 }

@@ -123,7 +123,7 @@ RC SSTableReader::ReadIndexBlock() {
                 index_block_handle.block_size_);
     return rc;
   }
-  if (rc = index_block_reader_.Init(index_block_buffer, CmpInnerKey, EasySave);
+  if (rc = index_block_reader_->Init(index_block_buffer, CmpInnerKey, EasySave);
       rc) {
     MLog->error("Init index block error: {}", strrc(rc));
     return rc;
@@ -145,7 +145,7 @@ RC SSTableReader::ReadMetaBlock() {
                 meta_block_handle.block_offset_, meta_block_handle.block_size_);
     return rc;
   }
-  if (rc = meta_block_reader_.Init(meta_block_buffer, EasyCmp, EasySave); rc) {
+  if (rc = meta_block_reader_->Init(meta_block_buffer, EasyCmp, EasySave); rc) {
     MLog->error("Init meta block error: {}", strrc(rc));
     return rc;
   }
@@ -158,7 +158,7 @@ RC SSTableReader::ReadFilterBlock() {
   string filter_block_handle_buffer;
   string_view filter_block_buffer;
 
-  if (rc = meta_block_reader_.Get("filter", filter_block_handle_buffer); rc) {
+  if (rc = meta_block_reader_->Get("filter", filter_block_handle_buffer); rc) {
     MLog->error("Get filter block handle error: {}", strrc(rc));
     return rc;
   }
@@ -202,6 +202,7 @@ RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table,
   return OK;
 }
 
+/* 在 sstable 内点查 */
 RC SSTableReader::Get(string_view inner_key, string &value) {
   RC rc = OK;
   // MLog->trace("SSTableReader want Get key {}", key);
@@ -215,7 +216,7 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
   /* index 搜索 高键 */
   string data_block_handle_data;
 
-  if (auto rc = index_block_reader_.Get(inner_key, data_block_handle_data);
+  if (auto rc = index_block_reader_->Get(inner_key, data_block_handle_data);
       rc) {
     MLog->info("the key {} out range of this table",
                InnerKeyToUserKey(inner_key));
@@ -227,13 +228,20 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
   data_block_handle.DecodeFrom(data_block_handle_data);
   MLog->info("Data Block Handle: off:{} size:{}",
              data_block_handle.block_offset_, data_block_handle.block_size_);
-  string_view data_block_buffer;
-
-  BlockCacheHandle block_cache_handle;
-  block_cache_handle.oid_ = oid_;
-  block_cache_handle.offset_ = data_block_handle.block_offset_;
-
   shared_ptr<BlockReader> data_block_reader;
+
+  rc = GetBlockReader(data_block_handle, data_block_reader);
+  if (rc) return rc;
+
+  /* read from data block */
+  return data_block_reader->Get(inner_key, value);
+}
+
+RC SSTableReader::GetBlockReader(BlockHandle &data_block_handle,
+                                 shared_ptr<BlockReader> &data_block_reader) {
+  RC rc = OK;
+  string_view data_block_buffer;
+  BlockCacheHandle block_cache_handle(oid_, data_block_handle.block_offset_);
 
   /* read from block cache first; */
   if (!db_ || !db_->block_cache_->Get(block_cache_handle, data_block_reader)) {
@@ -255,15 +263,18 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
     }
     if (db_) db_->block_cache_->Put(block_cache_handle, data_block_reader);
   }
-
-  /* read from data block */
-  return data_block_reader->Get(inner_key, value);
+  return OK;
 }
 
 string SSTableReader::GetFileName() { return file_->GetFileName(); }
 
 SSTableReader::SSTableReader(MmapReadAbleFile *file, const string &oid, DB *db)
-    : file_(file), file_size_(file_->Size()), db_(db), oid_(oid) {}
+    : file_(file),
+      file_size_(file_->Size()),
+      db_(db),
+      oid_(oid),
+      index_block_reader_(make_shared<BlockReader>()),
+      meta_block_reader_(make_shared<BlockReader>()) {}
 
 SSTableReader::~SSTableReader() {
   if (file_) {

@@ -91,6 +91,7 @@ add_executable(sstable_test
                src/hash_util.cpp
                src/encode.cpp
                src/keys.cpp
+               src/wal.cpp
                src/back_ground_worker.cpp
                src/monitor_logger.cpp
                test/sstable_test.cpp)
