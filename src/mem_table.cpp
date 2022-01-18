@@ -23,8 +23,10 @@ RC MemTable::PutTeeWAL(const MemKey &key, string_view value) {
   assert(wal_);
   rc = wal_->AddRecord(EncodeKVPair(key, value));
   if (rc) return rc;
-  rc = wal_->Sync();
-  if (rc) return rc;
+  if (options_->sync) {
+    rc = wal_->Sync();
+    if (rc) return rc;
+  }
   /* 然后再写入内存表 memtable */
   rc = Put(key, value);
   return rc;

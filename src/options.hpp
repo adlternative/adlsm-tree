@@ -36,6 +36,9 @@ struct DBOptions {
   spdlog::level::level_enum log_level = spdlog::level::err;
   const char *logger_name = "monitor_logger";
   const char *log_file_name = "monitor.log";
+
+  /* sync */
+  bool sync = false;
 };
 
 }  // namespace adl

@@ -351,7 +351,7 @@ TEST(db, test_db_put_get_and_reopen_get4) {
   using namespace adl;
   DB *db = nullptr;
   DBOptions opts;
-  string dbname = "/tmp/adl-testdb1";
+  string dbname = "~/adldb";
   opts.create_if_not_exists = true;
   if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
   ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
