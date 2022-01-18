@@ -69,7 +69,7 @@ RC DB::Open(string_view dbname, DBOptions &options, DB **dbptr) {
     /* init memtable */
     WAL *wal = nullptr;
     int64_t log_number = db->log_number_.fetch_add(1, memory_order_relaxed);
-    rc = FileManager::OpenWAL(dbname, log_number, &wal);
+    rc = FileManager::OpenWAL(true_dbname, log_number, &wal);
     if (rc) return rc;
     db->current_rev_->PushLogNumber(log_number);
     db->mem_ = make_shared<MemTable>(*db->options_, wal);

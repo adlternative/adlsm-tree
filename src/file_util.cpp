@@ -370,7 +370,8 @@ RC FileManager::OpenWAL(string_view dbname, int64_t log_number, WAL **result) {
   WritAbleFile *wal_file = nullptr;
 
   if (auto rc = OpenAppendOnlyFile(wal_file_name, &wal_file); rc) {
-    MLog->error("open wal file {} failed: {}", wal_file_name, rc);
+    MLog->error("open wal file {} failed: {} {}", wal_file_name, strrc(rc),
+                strerror(errno));
     return rc;
   }
   *result = new WAL(wal_file);
