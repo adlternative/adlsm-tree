@@ -351,7 +351,7 @@ TEST(db, test_db_put_get_and_reopen_get4) {
   using namespace adl;
   DB *db = nullptr;
   DBOptions opts;
-  string dbname = "/tmp/adl-testdb1";
+  string dbname = "~/adldb";
   opts.create_if_not_exists = true;
   if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
   ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
@@ -362,8 +362,18 @@ TEST(db, test_db_put_get_and_reopen_get4) {
 
   std::chrono::high_resolution_clock::time_point beginTime =
       std::chrono::high_resolution_clock::now();
-
+  auto bt = beginTime;
   for (int i = 0; i < 300000; i++) {
+    if (i % 10000) {
+      std::chrono::high_resolution_clock::time_point mbt =
+          std::chrono::high_resolution_clock::now();
+      std::cout << "write 10000 time: "
+                << std::chrono::duration_cast<std::chrono::microseconds>(mbt -
+                                                                         bt)
+                       .count()
+                << "mis\n";
+      bt = mbt;
+    }
     string key = "key" + to_string(i);
     string val = "value" + to_string(i);
     ASSERT_EQ(db->Put(key, val), OK) << "put error";

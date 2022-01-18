@@ -61,7 +61,7 @@ class DB {
 
   /* state */
   std::atomic<bool> closed_;
-  std::atomic<int64_t> sequence_id_;
+  int64_t sequence_id_;
   bool is_compacting_;
 
   /* disk */

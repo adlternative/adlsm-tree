@@ -18,15 +18,29 @@ RC MemTable::Put(const MemKey &key, string_view value) {
 }
 
 RC MemTable::PutTeeWAL(const MemKey &key, string_view value) {
+  using clock = chrono::high_resolution_clock;
+  clock::time_point bt = clock::now();
   RC rc = OK;
   /* 首先写到预写日志 wal */
   assert(wal_);
   rc = wal_->AddRecord(EncodeKVPair(key, value));
   if (rc) return rc;
+  clock::time_point et = clock::now();
+  fmt::print("wal add record time: {}mis\n",
+             chrono::duration_cast<chrono::microseconds>(et - bt).count());
+  bt = clock::now();
   rc = wal_->Sync();
   if (rc) return rc;
+  et = clock::now();
+  fmt::print("wal sync time: {}mis\n",
+             chrono::duration_cast<chrono::microseconds>(et - bt).count());
   /* 然后再写入内存表 memtable */
+  bt = clock::now();
   rc = Put(key, value);
+  et = clock::now();
+  fmt::print("mem put time: {}mis\n",
+             chrono::duration_cast<chrono::microseconds>(et - bt).count());
+
   return rc;
 }
 

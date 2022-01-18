@@ -1,6 +1,7 @@
 #include "db.hpp"
 #include <openssl/sha.h>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -203,17 +204,32 @@ RC DB::Get(string_view key, std::string &value) {
  * 是有问题的。 */
 RC DB::Write(string_view key, string_view value, OpType op) {
   unique_lock<mutex> lock(mutex_);
+  using clock = chrono::high_resolution_clock;
+  clock::time_point bt = clock::now();
+
   /* check if need freeze mem or compaction 这可能需要好一会儿 */
   if (auto rc = CheckMemAndCompaction(); rc) {
     MLog->error("DB CheckMemAndCompaction failed: {}", strrc(rc));
     return rc;
   }
+  clock::time_point et = clock::now();
+
+  fmt::print("check time: {}mis\n",
+             chrono::duration_cast<chrono::microseconds>(et - bt).count());
+
+  bt = clock::now();
 
   /* write memtable and wal */
-  MemKey mem_key(key, sequence_id_.fetch_add(1, memory_order_relaxed), op);
+  MemKey mem_key(key, sequence_id_++, op);
   auto mem = mem_;
   lock.unlock();
-  return mem->PutTeeWAL(mem_key, value);
+  auto rc = mem->PutTeeWAL(mem_key, value);
+  et = clock::now();
+
+  fmt::print("PutTeeWAL time: {}mis\n",
+             chrono::duration_cast<chrono::microseconds>(et - bt).count());
+
+  return rc;
 }
 
 /* 由于读 imem_ 需要锁定 */
