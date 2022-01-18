@@ -87,7 +87,9 @@ int remove_directory(const char *path) {
   return r;
 }
 
-RC FileManager::Destroy(string_view path) {
+RC FileManager::Destroy(string_view old_path) {
+  auto path = HandleHomeDir(old_path);
+
   if (IsDirectory(path)) {
     int err = remove_directory(path.data());
     if (err) {
@@ -102,38 +104,32 @@ RC FileManager::Destroy(string_view path) {
   return OK;
 }
 
-string FileManager::FixFileName(string_view path) {
+string FileManager::HandleHomeDir(string_view path) {
   string true_path;
-  if (path[0] == '~') {
-    const char *homedir;
-    if (!(homedir = getenv("HOME"))) homedir = getpwuid(getuid())->pw_dir;
-    if (homedir) {
-      true_path = homedir;
-      true_path += path.substr(1);
-    }
-  } else {
-    true_path = path;
+  const char *homedir;
+  if (!(homedir = getenv("HOME"))) homedir = getpwuid(getuid())->pw_dir;
+  if (homedir) {
+    true_path = homedir;
+    true_path += path.substr(1);
   }
   return true_path;
 }
 
-string FileManager::FixDirName(string_view path) {
-  string true_path;
-  if (path.empty()) return ".";
-  if (path[0] == '~') {
-    const char *homedir;
-    if (!(homedir = getenv("HOME"))) homedir = getpwuid(getuid())->pw_dir;
-    if (homedir) {
-      true_path = homedir;
-      true_path += path.substr(1);
-      path = true_path;
-    }
-  }
+string FileManager::FixFileName(string_view path) {
+  if (path.starts_with("~")) return HandleHomeDir(path);
+  return string(path);
+}
 
-  if (path.back() == '/') {
-    return string(path);
+string FileManager::FixDirName(string_view path) {
+  if (path.empty()) return ".";
+  string fix_path;
+  if (path.starts_with("~")) {
+    fix_path = HandleHomeDir(path);
+  } else {
+    fix_path = path;
   }
-  return string(path) + "/";
+  if (fix_path.back() != '/') fix_path += "/";
+  return fix_path;
 }
 
 RC FileManager::OpenWritAbleFile(string_view file_path, WritAbleFile **result) {

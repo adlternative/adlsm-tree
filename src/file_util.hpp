@@ -36,7 +36,7 @@ class FileManager {
   static string FixFileName(string_view path);
   static RC GetFileSize(string_view path, size_t *size);
   static RC ReName(string_view old_path, string_view new_path);
-
+  static string HandleHomeDir(string_view path);
   /* open */
   static RC OpenWritAbleFile(string_view filename, WritAbleFile **result);
   static RC OpenTempFile(string_view dir_path, string_view subfix,
