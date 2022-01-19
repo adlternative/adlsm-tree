@@ -285,7 +285,7 @@ TEST(block_test, Get4) {
 TEST(block_test, Iterator) {
   using namespace adl;
   BlockWriter block;
-  BlockReader block_reader;
+  auto block_reader = make_shared<BlockReader>();
   map<string, string> m;
   string result;
   RC rc = OK;
@@ -308,9 +308,9 @@ TEST(block_test, Iterator) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
+  ASSERT_EQ(block_reader->Init(result, EasyCmp, EasySave), OK);
   int i = 0;
-  for (auto iter = block_reader.begin(); iter != block_reader.end();
+  for (auto iter = block_reader->begin(); iter != block_reader->end();
        iter++, i++) {
     auto kv = *iter;
     ASSERT_TRUE(kv);

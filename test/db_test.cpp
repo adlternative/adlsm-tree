@@ -336,17 +336,6 @@ TEST(db, test_db_reopen3) {
   delete db;
 }
 
-/* used for test if can reopen db after crash it !!! */
-TEST(db, test_db_open) {
-  DB *db = nullptr;
-  DBOptions opts;
-  string dbname = "/tmp/adl-testdb1";
-  auto rc = DB::Open(dbname, opts, &db);
-  ASSERT_EQ(rc, OK) << strrc(rc);
-  ASSERT_EQ(db->Close(), OK);
-  delete db;
-}
-
 TEST(db, test_db_put_get_and_reopen_get4) {
   using namespace adl;
   DB *db = nullptr;

@@ -49,7 +49,7 @@ TEST(tempfile, ReadFileToString) {
 
 TEST(wal, add) {
   WAL *wal = nullptr;
-  string db("./test-db/");
+  string db(FileManager::FixDirName("./test-db/"));
   string waldir = WalDir(db);
   string oid(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
@@ -81,7 +81,7 @@ TEST(wal, add) {
 
 TEST(wal, add_with_eof) {
   WAL *wal = nullptr;
-  string db("./test-db/");
+  string db(FileManager::FixDirName("./test-db/"));
   string waldir = WalDir(db);
   string oid(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
@@ -120,7 +120,7 @@ TEST(wal, add_with_eof) {
 
 TEST(wal, drop) {
   WAL *wal = nullptr;
-  string db("./test-db/");
+  string db(FileManager::FixDirName("./test-db/"));
   string waldir = WalDir(db);
   string oid(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
@@ -231,7 +231,7 @@ RC OpenBadWAL(string_view dbname, int64_t log_number, BadWAL **result) {
 
 TEST(wal, add_with_bad_record) {
   BadWAL *wal = nullptr;
-  string db("./test-db/");
+  string db(FileManager::FixDirName("./test-db/"));
   string waldir = WalDir(db);
   string oid(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
@@ -264,7 +264,7 @@ TEST(wal, add_with_bad_record) {
 
 TEST(wal, add_with_bad_record2) {
   BadWAL *wal = nullptr;
-  string db("./test-db/");
+  string db(FileManager::FixDirName("./test-db/"));
   string waldir = WalDir(db);
   string oid(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
@@ -299,7 +299,7 @@ TEST(wal, add_with_bad_record2) {
 
 TEST(wal, add_with_bad_record3) {
   BadWAL *wal = nullptr;
-  string db("./test-db/");
+  string db(FileManager::FixDirName("./test-db/"));
   string waldir = WalDir(db);
   string oid(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
@@ -334,7 +334,7 @@ TEST(wal, add_with_bad_record3) {
 
 TEST(wal, add_with_bad_record4) {
   BadWAL *wal = nullptr;
-  string db("./test-db/");
+  string db(FileManager::FixDirName("./test-db/"));
   string waldir = WalDir(db);
   string oid(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");

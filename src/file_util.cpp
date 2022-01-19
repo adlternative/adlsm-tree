@@ -106,11 +106,16 @@ RC FileManager::Destroy(string_view old_path) {
 
 string FileManager::HandleHomeDir(string_view path) {
   string true_path;
-  const char *homedir;
-  if (!(homedir = getenv("HOME"))) homedir = getpwuid(getuid())->pw_dir;
-  if (homedir) {
-    true_path = homedir;
-    true_path += path.substr(1);
+
+  if (!path.starts_with("~")) {
+    true_path = path;
+  } else {
+    const char *homedir;
+    if (!(homedir = getenv("HOME"))) homedir = getpwuid(getuid())->pw_dir;
+    if (homedir) {
+      true_path = homedir;
+      true_path += path.substr(1);
+    }
   }
   return true_path;
 }

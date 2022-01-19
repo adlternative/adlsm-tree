@@ -16,11 +16,14 @@ void BuildSSTable(string_view dbname, adl::FileMetaData **meta_data_pointer) {
     MemKey key1(key, i, OP_PUT);
     ASSERT_EQ(table.Put(key1, val), OK) << "put error";
   }
-  if (FileManager::Exists(dbname)) ASSERT_EQ(FileManager::Destroy(dbname), OK);
+  if (FileManager::Exists(dbname))
+    ASSERT_EQ(FileManager::Destroy(dbname), OK)
+        << "destroy " << dbname << " error";
   ASSERT_EQ(FileManager::Create(dbname, DIR_), OK);
   ASSERT_EQ(FileManager::Create(SstDir(dbname), DIR_), OK);
 
   ASSERT_EQ(table.BuildSSTable(dbname, meta_data_pointer), OK);
+  ASSERT_NE(meta_data_pointer, nullptr);
 }
 
 void BuildSSTable2(string_view dbname, adl::FileMetaData **meta_data_pointer) {
@@ -129,7 +132,6 @@ TEST(sstable, sstable_reader) {
     }
   }
   delete sstable_meta;
-  delete file;
   delete sstable;
 }
 
@@ -163,7 +165,6 @@ TEST(sstable, sstable_reader2) {
   }
 
   delete sstable_meta;
-  delete file;
   delete sstable;
 }
 
@@ -191,7 +192,6 @@ TEST(sstable, sstable_reader3) {
   }
 
   delete sstable_meta;
-  delete file;
   delete sstable;
 }
 
@@ -217,7 +217,6 @@ TEST(sstable, sstable_reader4) {
   if (rc == OK) EXPECT_EQ(val, "value5000");
 
   delete sstable_meta;
-  delete file;
   delete sstable;
 }
 

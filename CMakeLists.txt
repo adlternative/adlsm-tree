@@ -26,11 +26,12 @@ add_executable(mem_table_test
                src/hash_util.cpp
                src/encode.cpp
                src/keys.cpp
+               src/wal.cpp
                src/back_ground_worker.cpp
                src/monitor_logger.cpp
                test/mem_table_test.cpp)
 
-target_link_libraries(mem_table_test crypto gtest gtest_main pthread fmt spdlog)
+target_link_libraries(mem_table_test crypto gtest gtest_main pthread fmt spdlog crc32c)
 
 # 数据库整体测试
 add_executable(db_test
@@ -49,6 +50,7 @@ add_executable(db_test
                src/encode.cpp
                src/back_ground_worker.cpp
                src/wal.cpp
+               src/hash_util.cpp
                src/monitor_logger.cpp
                test/db_test.cpp)
 target_link_libraries(db_test crypto gtest gtest_main pthread fmt spdlog crc32c)
@@ -102,6 +104,7 @@ add_executable(file_util_test
                src/file_util.cpp
                src/monitor_logger.cpp
                src/wal.cpp
+               src/hash_util.cpp
                test/file_util_test.cpp)
 target_link_libraries(file_util_test gtest gtest_main pthread spdlog fmt crc32c)
 
