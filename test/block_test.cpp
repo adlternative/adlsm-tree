@@ -290,7 +290,7 @@ TEST(block_test, Iterator) {
   string result;
   RC rc = OK;
   vector<pair<string, string>> vk;
-  for (int i = 0; i < 120; i++) {
+  for (int i = 0; i < 10000; i++) {
     string key("key");
     key += std::to_string(i);
     string value("value");
@@ -312,10 +312,10 @@ TEST(block_test, Iterator) {
   int i = 0;
   for (auto iter = block_reader->begin(); iter != block_reader->end();
        iter++, i++) {
-    auto kv = *iter;
-    ASSERT_TRUE(kv);
-    // fmt::print("{} {}\n", kv->first, kv->second);
-    EXPECT_EQ(kv->first, vk[i].first);
-    EXPECT_EQ(kv->second, vk[i].second);
+    if (!iter.Valid()) iter.Fetch();
+    ASSERT_TRUE(iter.Valid())<< fmt::format("batch {}", i);;
+    // fmt::print("{} {}\n",iter.Key(),iter.Value());
+    EXPECT_EQ(iter.Key(), vk[i].first) << fmt::format("batch {}", i);
+    EXPECT_EQ(iter.Value(), vk[i].second) << fmt::format("batch {}", i);
   }
 }

@@ -36,8 +36,17 @@ class BlockReader : public enable_shared_from_this<BlockReader> {
  public:
   class Iterator {
    public:
-    Iterator(shared_ptr<BlockReader> &&container, size_t restarts_block_idx = 0,
-             size_t entries_idx = 0);
+    Iterator(shared_ptr<BlockReader> &&container, size_t restarts_block_idx = 0
+             /* size_t entries_idx = 0 */);
+
+    Iterator()
+        : restarts_block_idx_(0),
+          entries_idx_(0),
+          value_len_(0),
+          unshared_key_len_(0),
+          shared_key_len_(0),
+          cur_entry_(nullptr),
+          valid_(false) {}
 
     Iterator &operator++();
 
@@ -53,9 +62,9 @@ class BlockReader : public enable_shared_from_this<BlockReader> {
       return 0;
     }
 
-    Iterator &operator=(Iterator &rhs);
+    Iterator &operator=(const Iterator &rhs);
 
-    Iterator(Iterator &rhs);
+    Iterator(const Iterator &rhs);
 
     Iterator &operator=(Iterator &&rhs) noexcept;
 
@@ -65,9 +74,9 @@ class BlockReader : public enable_shared_from_this<BlockReader> {
       return container_ == rhs.container_ && cur_entry_ == rhs.cur_entry_;
     }
 
-    bool operator!=(Iterator &rhs) { return *this != rhs; }
+    bool operator!=(Iterator &rhs) { return !(*this == rhs); }
 
-    optional<pair<string, string>> operator*();
+    bool Valid() { return valid_; }
 
     shared_ptr<BlockReader> GetContainer() { return container_; }
     operator bool() {
@@ -77,38 +86,40 @@ class BlockReader : public enable_shared_from_this<BlockReader> {
       return true;
     }
 
-    Iterator()
-        : restarts_block_idx_(0),
-          entries_idx_(0),
-          value_len_(0),
-          unshared_key_len_(0),
-          shared_key_len_(0),
-          cur_entry_(nullptr) {}
+    void Fetch();
+    void FetchWithoutValue();
+
+    const string_view Key() const { return cur_key_; }
+    const string_view Value() const { return cur_value_; }
 
    private:
+    void SetInValid();
+
     size_t restarts_block_idx_;
     size_t entries_idx_;
     shared_ptr<BlockReader> container_;
 
     const char *cur_entry_;
-    string last_key_;
     int value_len_;
     int unshared_key_len_;
     int shared_key_len_;
+
+    bool valid_;
+    string cur_key_;
+    string cur_value_;
   };
   friend class Iterator;
 
-  Iterator begin() { return Iterator(shared_from_this(), 0, 0); }
+  Iterator begin() { return Iterator(shared_from_this(), 0); }
+
   Iterator end() {
-    { return Iterator(shared_from_this(), restarts_.size(), 0); }
+    { return Iterator(shared_from_this(), restarts_.size()); }
   }
 
   BlockReader() = default;
   RC Init(string_view data, std::function<int(string_view, string_view)> &&cmp,
           std::function<RC(string_view, string_view, string_view innner_key,
                            string &value)> &&handle_result);
-  std::optional<std::pair<string, const char *>> SeekWithIndex(
-      size_t restarts_block_idx, size_t entries_idx);
 
   /* 点查 */
   RC Get(string_view key, string &value);

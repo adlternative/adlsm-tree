@@ -241,12 +241,13 @@ TEST(sstable, Iterator) {
   int i = 0;
   for (auto iter = sstable_reader->begin(); iter != sstable_reader->end();
        iter++, i++) {
-    auto kv = *iter;
-    ASSERT_TRUE(kv);
+    if (!iter.Valid()) iter.Fetch();
+    ASSERT_TRUE(iter.Valid());
+
     MemKey memkey;
-    memkey.FromKey(kv->first);
+    memkey.FromKey(iter.Key());
     EXPECT_EQ(
-        fmt::format("{} {}", memkey, kv->second),
+        fmt::format("{} {}", memkey, iter.Value()),
         fmt::format("key {} {} {}", 10000 - i, i % 2 ? "OP_DELETE" : "OP_PUT",
                     i % 2 ? "" : "value" + to_string((10000 - i) / 2)));
   }
