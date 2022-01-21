@@ -36,14 +36,21 @@ class DB {
 
  private:
   RC Write(string_view key, string_view value, OpType op);
-  RC CheckMemAndCompaction();
-  RC DoCompaction();
+  RC MaybeDoCompaction();
+  void DoCompaction();
   RC DoMinorCompaction();
+  RC DoMajorCompaction();
+
+  RC GetSSTableReader(const string &oid, shared_ptr<SSTableReader> &sstable);
+  /* 将一层中所有 runs 进行合并，
+  创建一个新的 run 放到下一层 */
+  RC MergeRuns(const Level &level, FileMetaData **meta_data_pointer);
 
   RC BuildSSTable(const shared_ptr<adl::MemTable> &mem);
   RC FreezeMemTable();
   bool NeedCompactions();
-  bool NeedFreezeMemTable();
+  bool NeedMajorCompactions();
+  bool NeedMinorCompactions();
 
   // RC InitCurrentRev();
   RC UpdateCurrentRev(Revision *rev);
@@ -59,10 +66,7 @@ class DB {
   shared_ptr<MemTable> mem_;
   shared_ptr<MemTable> imem_;
 
-  /* state */
-  std::atomic<bool> closed_;
   std::atomic<int64_t> sequence_id_;
-  bool is_compacting_;
 
   /* disk */
   string dbname_;
@@ -75,6 +79,10 @@ class DB {
   /* back ground */
   vector<Worker *> workers_;
   RC save_backgound_rc_;
+
+  /* state */
+  std::atomic<bool> closed_;
+  bool is_compacting_;
 
   /* current revision */
   shared_ptr<Revision> current_rev_;

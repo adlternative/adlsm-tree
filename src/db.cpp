@@ -7,10 +7,12 @@
 #include <sstream>
 #include "defer.hpp"
 #include "file_util.hpp"
+#include "hash_util.hpp"
 #include "mem_table.hpp"
 #include "monitor_logger.hpp"
 #include "rc.hpp"
 #include "revision.hpp"
+#include "sstable.hpp"
 
 namespace adl {
 
@@ -204,7 +206,7 @@ RC DB::Get(string_view key, std::string &value) {
 RC DB::Write(string_view key, string_view value, OpType op) {
   unique_lock<mutex> lock(mutex_);
   /* check if need freeze mem or compaction 这可能需要好一会儿 */
-  if (auto rc = CheckMemAndCompaction(); rc) {
+  if (auto rc = MaybeDoCompaction(); rc) {
     MLog->error("DB CheckMemAndCompaction failed: {}", strrc(rc));
     return rc;
   }
@@ -217,61 +219,93 @@ RC DB::Write(string_view key, string_view value, OpType op) {
 }
 
 /* 由于读 imem_ 需要锁定 */
-RC DB::CheckMemAndCompaction() {
+RC DB::MaybeDoCompaction() {
   /* 表示已经锁 */
   unique_lock<mutex> lock(mutex_, adopt_lock);
 
   while (!closed_) {
-    /* 如果 memtable 没满，我们就可以返回  */
-    if (!NeedFreezeMemTable()) break;
-    /* memtable 满了，如果 imem 非空 等待
-    minor compaction 将 imem 置为空 */
-    MLog->info("DB wait until imem empty");
-    while (imem_ && !save_backgound_rc_ && !closed_)
+    bool need_minor = NeedMinorCompactions();
+    bool need_major = NeedMajorCompactions();
+    if (!need_minor && !need_major)
+      break;
+    else if (need_minor) {
+      /* memtable 满了，如果 imem 非空 等待
+      minor compaction 将 imem 置为空 */
+      MLog->info("MaybeDoCompaction wait for imem empty");
+      while (!closed_ && !save_backgound_rc_ && imem_)
+        background_work_done_cond_.wait(lock);
+
+      if (save_backgound_rc_)
+        return save_backgound_rc_;
+      else if (closed_)
+        return OK;
+
+      MLog->info("MaybeDoCompaction wait imem empty done");
+      /* mem -> imem */
+      if (auto rc = FreezeMemTable(); rc) return rc;
+
+      if (!is_compacting_) {
+        is_compacting_ = true;
+        workers_[0]->Add([this]() { DoCompaction(); });
+      }
+      MLog->info("MaybeDoCompaction wait new imem empty");
+      while (!closed_ && !save_backgound_rc_ && imem_)
+        background_work_done_cond_.wait(lock);
+      MLog->info("MaybeDoCompaction wait new imem empty done");
+
+    } else if (need_major) {
+      if (!is_compacting_) {
+        is_compacting_ = true;
+        workers_[0]->Add([this]() { DoCompaction(); });
+      }
+
+      // while (!closed_ && !save_backgound_rc_)
       background_work_done_cond_.wait(lock);
-    if (closed_) return OK;
-    if (save_backgound_rc_) return save_backgound_rc_;
-    MLog->info("DB wait imem empty ok");
-    /* mem -> imem */
-    FreezeMemTable();
-    /* 检查是否需要 Compaction */
-    if (!NeedCompactions()) break;
-    workers_[0]->Add([this]() { DoCompaction(); });
-    /* wait for compaction done */
-    background_work_done_cond_.wait(lock);
-    if (save_backgound_rc_) return save_backgound_rc_;
+    }
+
+    if (save_backgound_rc_)
+      return save_backgound_rc_;
+    else if (closed_)
+      return OK;
   }
   lock.release();
-  return closed_ ? DB_CLOSED : OK;
+  return OK;
 }
 
 /* background thread do compaction */
 /* 由于读 imem_ 需要锁定 */
-RC DB::DoCompaction() {
+void DB::DoCompaction() {
+  MLog->info("DB will do compaction");
   RC rc = OK;
   lock_guard<mutex> lock(mutex_);
-  is_compacting_ = true;
+  MLog->info("DB get the lock");
 
-  if (imem_) {
-    /* minor compaction */
-    rc = DoMinorCompaction();
-  } else {
-    /* major compaction */
-    rc = UN_IMPLEMENTED;
-  }
-  if (rc) {
-    save_backgound_rc_ = rc;
-    MLog->error("DB compaction failed: {}", strrc(rc));
-  } else {
+  defer _([&]() {
     is_compacting_ = false;
-    /* TODO(adlternative) 可能产生 compaction 级联更新 但不一定是立刻
-    （因为不是立即抢锁，或许可以修改它）*/
-    // fmt::print("DB Compaction may need Compaction Again\n");
-    if (NeedCompactions()) workers_[0]->Add([this]() { DoCompaction(); });
-    // fmt::print("DB Compaction add Compaction Again\n");
+    background_work_done_cond_.notify_all();
+  });
+
+  /* 疯狂压实 */
+  while (!closed_) {
+    bool need_major = NeedMajorCompactions();
+    if (!imem_ && !need_major) {
+      MLog->info("DB dont't need compaction?");
+      break;
+    }
+
+    if (imem_) {
+      /* minor compaction */
+      rc = DoMinorCompaction();
+    } else if (need_major) {
+      /* major compaction */
+      rc = DoMajorCompaction();
+    }
+
+    if (rc) {
+      save_backgound_rc_ = rc;
+      MLog->error("DB compaction failed: {}", strrc(rc));
+    }
   }
-  background_work_done_cond_.notify_all();
-  return rc;
 }
 
 /* 由于写 imem_ 需要锁定 */
@@ -285,6 +319,172 @@ RC DB::DoMinorCompaction() {
   imem_->DropWAL();
   imem_.reset();
   return OK;
+}
+
+/* 通过 oid 获取 sstablereader
+ *先从缓存中找,找不到去磁盘找,并放到缓存中 */
+RC DB::GetSSTableReader(const string &oid, shared_ptr<SSTableReader> &sstable) {
+  RC rc = OK;
+  /* cache hit */
+  if (table_cache_->Get(oid, sstable)) return rc;
+
+  /* cache miss */
+  string sstable_path = SstFile(SstDir(dbname_), oid);
+  SSTableReader *sstable_reader = nullptr;
+  MmapReadAbleFile *sst_file = nullptr;
+  rc = FileManager::OpenMmapReadAbleFile(sstable_path, &sst_file);
+  if (rc) {
+    MLog->error("open sstable file {} failed", sstable_path);
+    return rc;
+  }
+  /* sst_file 的拥有权从此归于 sstable_reader 所有 */
+  rc = SSTableReader::Open(sst_file, &sstable_reader, oid, this);
+  if (rc) {
+    delete sst_file;
+    MLog->error("open sstable file {} failed", sstable_path);
+    return rc;
+  }
+  sstable.reset(sstable_reader);
+  table_cache_->Put(oid, sstable);
+  return rc;
+}
+
+RC DB::DoMajorCompaction() {
+  RC rc = OK;
+
+  MLog->info("DB is doing major compaction");
+
+  int level = current_rev_->PickBestCompactionLevel();
+
+  if (level == -1) /* nothing todo */
+    return OK;
+
+  const auto &level_obj = current_rev_->GetLevel(level);
+
+  /* 对 level_obj 中所有 sort_run 进行合并
+  创建新的 L[level+1] sstable */
+  FileMetaData *sstable_file_meta = nullptr;
+
+  /* 进行 merge 合并 */
+  if (rc = MergeRuns(level_obj, &sstable_file_meta); rc) {
+    MLog->error("DB merge runs failed: {}", strrc(rc));
+    return rc;
+  }
+  MLog->info("DB major ok!");
+
+  defer de([&]() {
+    if (rc && sstable_file_meta) delete sstable_file_meta;
+  });
+
+  vector<Level> new_levels = current_rev_->GetLevels();
+  /* 更新层级文件元数据 */
+  if (!sstable_file_meta || sstable_file_meta->belong_to_level >= 5 ||
+      sstable_file_meta->belong_to_level < 0)
+    return BAD_FILE_META;
+  auto &new_level = new_levels[sstable_file_meta->belong_to_level];
+  new_level.Insert(sstable_file_meta);
+  /* 创建新 N+1 层级对象文件 */
+  if (rc = new_level.BuildFile(dbname_); rc) return rc;
+  /* N 层 清空 */
+  new_levels[level].Clear();
+
+  deque<int64_t> new_log_nums = current_rev_->GetLogNumbers();
+  /* 创建新版本对象文件 */
+  auto new_revision =
+      new Revision(this, std::move(new_levels), std::move(new_log_nums));
+  defer d2([&]() {
+    if (rc) delete new_revision;
+  });
+
+  if (rc = new_revision->BuildFile(dbname_); rc) return rc;
+
+  /* 更新 current 引用 */
+  if (rc = UpdateCurrentRev(new_revision); rc) return rc;
+
+  return OK;
+}
+
+struct MergeCmp {
+  bool operator()(const SSTableReader::Iterator &lhs,
+                  const SSTableReader::Iterator &rhs) {
+    return CmpInnerKey(lhs.Key(), rhs.Key()) < 0;
+  }
+};
+
+RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
+  RC rc = OK;
+  int count = 0;
+  priority_queue<SSTableReader::Iterator, vector<SSTableReader::Iterator>,
+                 MergeCmp>
+      iter_pq;
+  FileMetaData *meta_data = new FileMetaData;
+
+  /* 将所有 LN 的 sstable 的 begin() 迭代器加入到优先队列中 */
+  const auto &files_meta = level.GetSSTableFilesMeta();
+  for (auto iter = files_meta.rbegin(); iter != files_meta.rend(); ++iter) {
+    auto &file_meta = *iter;
+    shared_ptr<SSTableReader> sstable;
+    rc = GetSSTableReader(sha256_digit_to_hex(file_meta->sha256), sstable);
+    if (rc) {
+      MLog->debug("GetSSTableReader failed with {}", strrc(rc));
+      return rc;
+    }
+
+    auto block_iter = sstable->begin();
+    if (!block_iter.Valid()) block_iter.Fetch();
+    iter_pq.push(block_iter);
+  }
+
+  auto sstable_ok = NewSSTableWriter(dbname_, options_);
+  if (!sstable_ok) return NEW_SSTABLE_ERROR;
+  auto merge_sstable_writer = std::move(sstable_ok.value());
+
+  string last_key;
+
+  MemKey max_key;
+  MemKey min_key;
+
+  while (iter_pq.size()) {
+    /* 从优先队列中拿出所有 sstable 中 CmpInnerKey 最小的项的 kv, 出队
+     * 然后写入到新的 sstable 中 */
+    auto cur = iter_pq.top();
+    auto cur_key = cur.Key();
+    auto cur_value = cur.Value();
+
+    iter_pq.pop();
+    /* 如果 user_key 部分和前一个 key 是相同的,那么我们应当将它抛弃 */
+    if (!last_key.empty() && !CmpUserKeyOfInnerKey(last_key, cur_key)) continue;
+
+    /* 目前最后一层的逻辑还是 tiering 后面改成 leveling 后可以删除墓碑 */
+    rc = merge_sstable_writer->Add(cur_key, cur_value);
+    if (rc) return rc;
+    /* 记录第一个 key 后面需要保存 */
+    if (!count) min_key.FromKey(cur_key);
+
+    last_key = cur_key;
+    count++;
+    cur++;
+
+    /* 如果这个 sstable 还没有到结尾则继续将迭代器加入到优先队列中 */
+    if (cur != cur.GetContainerEnd()) {
+      if (!cur.Valid()) cur.Fetch();
+      iter_pq.push(cur);
+    }
+  }
+
+  if (rc = merge_sstable_writer->Final(meta_data->sha256); rc) return rc;
+
+  /* 记录最后一个 key 后面需要保存 */
+  max_key.FromKey(last_key);
+
+  meta_data->file_size = merge_sstable_writer->GetFileSize();
+  meta_data->min_inner_key = std::move(min_key);
+  meta_data->max_inner_key = std::move(max_key);
+  meta_data->num_keys = count;
+  /* 目前 minor compaction 生成的 sstable 就放在 l0 */
+  meta_data->belong_to_level = level.GetLevel() + 1;
+  *meta_data_pointer = meta_data;
+  return rc;
 }
 
 /* imm --> sstable */
@@ -307,7 +507,7 @@ RC DB::BuildSSTable(const shared_ptr<adl::MemTable> &mem) {
 
   /* 最旧的 wal 不需要了 */
   deque<int64_t> new_log_nums = current_rev_->GetLogNumbers();
-  if (new_log_nums.size() < 1) return NOEXCEPT_SIZE;
+  if (new_log_nums.empty()) return NOEXCEPT_SIZE;
   new_log_nums.pop_front();
 
   /* 创建新版本对象文件 */
@@ -339,18 +539,24 @@ RC DB::FreezeMemTable() {
   return OK;
 }
 
-/* 读 imem_ 需要锁定 */
+/*
+ major + minor
+ need lock!
+*/
 bool DB::NeedCompactions() {
-  if (closed_) return false;
-  if (imem_) return true;
-  // if (level0_files_ > options_->level0_files_limit) return true;
-  // if (leveln_total_size_ > options_->leveln_total_size_limit) return true;
-  return false;
+  return NeedMinorCompactions() || NeedMajorCompactions();
+}
+
+/*
+  comapction trigger
+*/
+bool DB::NeedMajorCompactions() {
+  return current_rev_->PickBestCompactionLevel() != -1;
 }
 
 /* 读 mem 需要锁定 */
-bool DB::NeedFreezeMemTable() {
-  return !closed_ && mem_->GetMemTableSize() > options_->mem_table_max_size;
+bool DB::NeedMinorCompactions() {
+  return mem_->GetMemTableSize() > options_->mem_table_max_size;
 }
 
 RC DB::UpdateCurrentRev(Revision *rev) {

@@ -5,8 +5,10 @@
 #include "block.hpp"
 #include "db.hpp"
 #include "file_util.hpp"
+#include "hash_util.hpp"
 #include "keys.hpp"
 #include "monitor_logger.hpp"
+#include "options.hpp"
 #include "rc.hpp"
 
 namespace adl {
@@ -86,7 +88,27 @@ RC SSTableWriter::Final(unsigned char sha256_digit[]) {
   offset_ += (int)buffer_.size();
 
   SHA256_Final(sha256_digit, &sha256_);
+
+  string sstable_path =
+      SstFile(SstDir(dbname_), sha256_digit_to_hex(sha256_digit));
+
+  if (rc = file_->ReName(sstable_path); rc) return rc;
+  if (rc = file_->Close(); rc) return rc;
+
   return OK;
+}
+
+optional<unique_ptr<SSTableWriter>> NewSSTableWriter(string_view dbname,
+                                                     const DBOptions *options) {
+  TempFile *temp_file = nullptr;
+  auto rc = FileManager::OpenTempFile(SstDir(dbname), "tmp_sst_", &temp_file);
+  if (rc) {
+    MLog->error("open temp file in {} with {}", dbname, strrc(rc));
+    return nullopt;
+  }
+
+  /* temp_file belong to sstable writer now */
+  return make_unique<SSTableWriter>(dbname, temp_file, *options);
 }
 
 RC SSTableReader::ReadFooterBlock() {

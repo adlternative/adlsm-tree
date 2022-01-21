@@ -35,6 +35,7 @@ enum RC {
   NOEXCEPT_SIZE,
   BAD_FILE_PATH,
   BAD_CURRENT_FILE,
+  NEW_SSTABLE_ERROR,
 };
 
 inline std::string_view strrc(RC rc) {
@@ -95,6 +96,8 @@ inline std::string_view strrc(RC rc) {
       return "bad file path";
     case BAD_CURRENT_FILE:
       return "bad current file";
+    case NEW_SSTABLE_ERROR:
+      return "new sstable error";
     default:
       return "unknown error";
   }

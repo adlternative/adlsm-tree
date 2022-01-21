@@ -24,7 +24,7 @@ Level::Level(DB *db, int level, const string_view &oid)
   hex_to_sha256_digit(oid, sha256_digit_);
 }
 
-Level::Level(DB *db) : Object(db), level_(-1) {
+Level::Level(DB *db, int level) : Object(db), level_(level) {
   memset(sha256_digit_, 0, SHA256_DIGEST_LENGTH * sizeof(unsigned char));
 }
 
@@ -60,6 +60,12 @@ bool Level::HaveCheckSum() const {
     if (sha256_digit_[i] != 0) return true;
   }
   return false;
+}
+
+int Level::TotalFileSize() const {
+  int total_size = 0;
+  for (auto &file_meta : files_meta_) total_size += (int)file_meta->file_size;
+  return total_size;
 }
 
 int Level::GetLevel() const { return level_; }
@@ -116,6 +122,10 @@ RC Level::BuildFile(string_view dbname) {
   delete temp_level_file;
   return OK;
 }
+
+int Level::FilesCount() const { return (int)files_meta_.size(); }
+
+void Level::SetLevel(int level) { level_ = level; }
 
 RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
   RC rc = OK;
@@ -249,34 +259,20 @@ RC Level::Get(string_view key, string &value) {
   }
   MLog->debug("{} file in level {}", files_meta_.size(), GetOid());
 
-  for (auto &file_meta : files_meta_) {
+  for (auto iter = files_meta_.rbegin(); iter != files_meta_.rend(); ++iter) {
+    auto &file_meta = *iter;
     if (mk < file_meta->min_inner_key &&
         mk.user_key_ != file_meta->min_inner_key.user_key_)
       continue;
     if (file_meta->max_inner_key < mk) continue;
 
     shared_ptr<SSTableReader> sstable;
-
-    string oid = sha256_digit_to_hex(file_meta->sha256);
-    if (!db_->table_cache_->Get(oid, sstable)) {
-      string sstable_path = file_meta->GetSSTablePath(db_->dbname_);
-      SSTableReader *sstable_reader = nullptr;
-      MmapReadAbleFile *sst_file = nullptr;
-      rc = FileManager::OpenMmapReadAbleFile(sstable_path, &sst_file);
-      if (rc) {
-        MLog->error("open sstable file {} failed", sstable_path);
-        return rc;
-      }
-      /* sst_file 的拥有权从此归于 sstable_reader 所有 */
-      rc = SSTableReader::Open(sst_file, &sstable_reader, oid, db_);
-      if (rc) {
-        delete sst_file;
-        MLog->error("open sstable file {} failed", sstable_path);
-        return rc;
-      }
-      sstable.reset(sstable_reader);
-      db_->table_cache_->Put(oid, sstable);
+    rc = db_->GetSSTableReader(sha256_digit_to_hex(file_meta->sha256), sstable);
+    if (rc) {
+      MLog->debug("GetSSTableReader failed with {}", strrc(rc));
+      return rc;
     }
+
     /* TODO(adl): use seq 实现 snapshot read */
     rc = sstable->Get(inner_key, value);
     if (rc == NOT_FOUND) {
@@ -299,7 +295,9 @@ Revision::Revision(DB *db, vector<Level> &&levels,
                    deque<int64_t> &&log_nums) noexcept
     : Object(db), levels_(std::move(levels)), log_nums_(std::move(log_nums)) {}
 
-const vector<Level> &Revision::GetLevels() { return levels_; }
+const vector<Level> &Revision::GetLevels() const { return levels_; }
+
+const Level &Revision::GetLevel(int i) const { return levels_[i]; }
 
 RC Revision::BuildFile(string_view dbname) {
   /* seq write file */
@@ -312,11 +310,9 @@ RC Revision::BuildFile(string_view dbname) {
   /* levels */
   for (const auto &level : levels_) {
     if (level.Empty()) continue;
-    stringstream ss;
-    ss << level.GetLevel() << " " << level.GetOid() << '\n';
-    auto write_buffer = ss.str();
-    SHA256_Update(&sha256_, write_buffer.c_str(), write_buffer.size());
-    temp_rev_file->Append(write_buffer);
+    string content = fmt::format("{} {}\n", level.GetLevel(), level.GetOid());
+    SHA256_Update(&sha256_, content.c_str(), content.size());
+    temp_rev_file->Append(content);
   }
   SHA256_Final(sha256_digit_, &sha256_);
   string rev_file_path = RevFile(rev_dir, sha256_digit_to_hex(sha256_digit_));
@@ -364,8 +360,8 @@ RC Revision::LoadFromFile(string_view dbname, string_view rev_sha_hex) {
   return OK;
 }
 
-Revision::Revision(DB *db) : Object(db), /* seq_(0), */ levels_(5, Level(db)) {
-  for (int i = 0; i < 5; ++i) levels_[i].SetLevel(i);
+Revision::Revision(DB *db) : Object(db) {
+  for (int i = 0; i < 5; ++i) levels_.emplace_back(db, i);
 }
 
 RC Revision::Get(string_view key, std::string &value) {
@@ -378,4 +374,29 @@ RC Revision::Get(string_view key, std::string &value) {
   return rc;
 }
 
+int Revision::PickBestCompactionLevel() {
+  int levels_size = (int)levels_.size();
+  assert(levels_size == 5);
+
+  for (int i = 0; i < levels_size - 1; i++)
+    if (levels_[i].FilesCount() > db_->options_->level_files_limit) return i;
+
+  return -1;
+}
+void Revision::PushLogNumber(int64_t num) { log_nums_.push_back(num); }
+
+void Revision::PopLogNumber() { log_nums_.pop_front(); }
+
+const std::deque<int64_t> &Revision::GetLogNumbers() const { return log_nums_; }
+
+int64_t Revision::GetMaxSeq() {
+  int64_t maxseq = 0;
+  for (int i = 0; i < levels_.size(); i++)
+    maxseq = max(maxseq, levels_[i].GetMaxSeq());
+  return maxseq;
+}
+const std::set<shared_ptr<FileMetaData>, FileMetaDataCompare>
+    &Level::GetSSTableFilesMeta() const {
+  return files_meta_;
+}
 }  // namespace adl

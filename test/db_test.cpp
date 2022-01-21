@@ -395,3 +395,66 @@ TEST(db, test_db_put_get_and_reopen_get4) {
 
   ASSERT_EQ(db->Close(), OK);
 }
+
+TEST(db, test_compaction) {
+  using namespace adl;
+  DB *db = nullptr;
+  DBOptions opts;
+  opts.mem_table_max_size = 1UL << 20; /* 1MB */
+
+  string dbname = "~/adldb";
+  opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+
+  defer _([&]() {
+    if (db) delete db;
+  });
+
+  std::chrono::high_resolution_clock::time_point beginTime =
+      std::chrono::high_resolution_clock::now();
+
+  for (int i = 0; i < 300000; i++) {
+    string key = "key" + to_string(i);
+    string val = "value" + to_string(i);
+    ASSERT_EQ(db->Put(key, val), OK) << "put error";
+  }
+
+  std::chrono::high_resolution_clock::time_point endTime =
+      std::chrono::high_resolution_clock::now();
+  std::cout << "write time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                     beginTime)
+                   .count()
+            << "ms\n";
+
+  ASSERT_EQ(db->Close(), OK);
+
+  // beginTime = std::chrono::high_resolution_clock::now();
+  // ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  // endTime = std::chrono::high_resolution_clock::now();
+
+  // std::cout << "open time: "
+  //           << std::chrono::duration_cast<std::chrono::milliseconds>(endTime
+  //           -
+  //                                                                    beginTime)
+  //                  .count()
+  //           << "ms\n";
+
+  // beginTime = std::chrono::high_resolution_clock::now();
+  // for (int i = 0; i < 300000; i++) {
+  //   string key = "key" + to_string(i);
+  //   string val;
+  //   ASSERT_EQ(db->Get(key, val), OK) << "get error";
+  //   ASSERT_EQ(val, "value" + to_string(i));
+  // }
+  // endTime = std::chrono::high_resolution_clock::now();
+  // std::cout << "get time: "
+  //           << std::chrono::duration_cast<std::chrono::milliseconds>(endTime
+  //           -
+  //                                                                    beginTime)
+  //                  .count()
+  //           << "ms\n";
+
+  // ASSERT_EQ(db->Close(), OK);
+}

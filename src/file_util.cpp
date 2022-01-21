@@ -329,10 +329,7 @@ RC WritAbleFile::Append(string_view data) {
   return OK;
 }
 
-TempFile::TempFile(const std::string &file_path, int fd)
-    : WritAbleFile(file_path, fd) {}
-
-RC TempFile::ReName(string_view new_file) {
+RC WritAbleFile::ReName(string_view new_file) {
   string true_path = FileManager::FixFileName(new_file);
   int ret = rename(file_path_.c_str(), true_path.c_str());
   if (ret) {
@@ -340,9 +337,13 @@ RC TempFile::ReName(string_view new_file) {
                 true_path, strerror(errno));
     return RENAME_FILE_ERROR;
   }
+  file_path_ = std::move(true_path);
   // MLog->info("tempfile name:{} rename to {}", file_path_, true_path);
   return OK;
 }
+
+TempFile::TempFile(const std::string &file_path, int fd)
+    : WritAbleFile(file_path, fd) {}
 
 RC TempFile::Open(string_view dir_path, string_view subfix, TempFile **result) {
   string tmp_file(FileManager::FixDirName(dir_path));

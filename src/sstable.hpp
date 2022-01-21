@@ -4,6 +4,7 @@
 #include <openssl/sha.h>
 #include <string>
 #include "block.hpp"
+#include "file_util.hpp"
 #include "filter_block.hpp"
 #include "footer_block.hpp"
 #include "rc.hpp"
@@ -25,12 +26,20 @@ class SSTableWriter {
   RC Add(string_view key, string_view value);
   RC Final(unsigned char sha256_digit[]);
 
+  size_t GetFileSize() {
+    size_t size = 0;
+    FileManager::GetFileSize(file_->GetPath(), &size);
+    return size;
+  }
+
+  string GetPath() { return file_->GetPath(); }
+
  private:
   RC FlushDataBlock();
 
   static constexpr unsigned int need_flush_size_ = (1UL << 12); /* 4KB */
   string dbname_;
-  WritAbleFile *file_;
+  unique_ptr<WritAbleFile> file_;
 
   /* 数据块 */
   BlockWriter data_block_;
@@ -58,6 +67,9 @@ class SSTableWriter {
   string last_key_; /* 最后一次 add 的 key */
 };
 
+optional<unique_ptr<SSTableWriter>> NewSSTableWriter(string_view dbname,
+                                                     const DBOptions *options);
+
 class DB;
 
 class SSTableReader : public enable_shared_from_this<SSTableReader> {
@@ -69,8 +81,7 @@ class SSTableReader : public enable_shared_from_this<SSTableReader> {
         : container_(std::move(container)),
           idx_iter_(std::move(idx_iter)),
           data_iter_(nullopt) {
-      if (idx_iter_.value() != container_->index_block_reader_->end())
-        ResetDataIter();
+      if (*idx_iter_ != container_->index_block_reader_->end()) ResetDataIter();
     }
 
     Iterator &operator++() {
@@ -112,15 +123,16 @@ class SSTableReader : public enable_shared_from_this<SSTableReader> {
         return *data_iter_ <=> *rhs.data_iter_;
     }
 
-    Iterator &operator=(Iterator &rhs) {
+    Iterator &operator=(const Iterator &rhs) {
       if (&rhs != this) {
         container_ = rhs.container_;
-        if (rhs.idx_iter_) idx_iter_ = *rhs.idx_iter_;
-        if (rhs.data_iter_) data_iter_ = *rhs.data_iter_;
+        if (rhs.idx_iter_) idx_iter_ = rhs.idx_iter_.value();
+        if (rhs.data_iter_) data_iter_ = rhs.data_iter_.value();
       }
       return *this;
     }
-    Iterator(Iterator &rhs) : container_(rhs.container_) {
+
+    Iterator(const Iterator &rhs) : container_(rhs.container_) {
       if (rhs.idx_iter_) idx_iter_ = *rhs.idx_iter_;
       if (rhs.data_iter_) data_iter_ = *rhs.data_iter_;
     }
@@ -147,18 +159,29 @@ class SSTableReader : public enable_shared_from_this<SSTableReader> {
 
     bool operator!=(Iterator &rhs) { return !(*this == rhs); }
 
-    optional<pair<string, string>> operator*() {
-      if (data_iter_ && *data_iter_) return **data_iter_;
-      return nullopt;
+    const string_view Key() const { return data_iter_->Key(); }
+    const string_view Value() const { return data_iter_->Value(); }
+
+    void Fetch() {
+      // assert(data_iter_);
+      data_iter_->Fetch();
     }
+
+    bool Valid() {
+      // assert(data_iter_);
+      return data_iter_->Valid();
+    }
+
+    Iterator GetContainerEnd() { return container_->end(); }
 
    private:
     void ResetDataIter() {
       if (!idx_iter_) return;
-      auto kv = **idx_iter_;
-      if (!kv) return;
+      if (!idx_iter_->Valid()) idx_iter_->Fetch();
+
       BlockHandle data_block_handle;
-      data_block_handle.DecodeFrom(kv->second);
+      data_block_handle.DecodeFrom(idx_iter_->Value());
+
       shared_ptr<BlockReader> data_block_reader;
 
       container_->GetBlockReader(data_block_handle, data_block_reader);

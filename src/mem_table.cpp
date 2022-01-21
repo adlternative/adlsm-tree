@@ -59,28 +59,25 @@ RC MemTable::BuildSSTable(string_view dbname,
   string true_path = FileManager::FixDirName(dbname);
   dbname = true_path;
   FileMetaData *meta_data = new FileMetaData;
-  TempFile *temp_file = nullptr;
-  auto rc = FileManager::OpenTempFile(SstDir(dbname), "tmp_sst_", &temp_file);
+
+  /* 一个新的 sstable writer */
+  auto sstable_ok = NewSSTableWriter(dbname, options_);
+  if (!sstable_ok) return NEW_SSTABLE_ERROR;
+  auto sstable = std::move(sstable_ok.value());
+
+  /* 向 sstable 写入 memtable 的所有数据 */
+  RC rc = ForEachNoLock([&](const MemKey &memkey, string_view value) -> RC {
+    string key = memkey.ToKey();
+    return sstable->Add(key, value);
+  });
   if (rc) return rc;
-  auto sstable = new SSTableWriter(dbname, temp_file, *options_);
-  if (rc = ForEachNoLock([&](const MemKey &memkey, string_view value) -> RC {
-        string key = memkey.ToKey();
-        return sstable->Add(key, value);
-      });
-      rc)
-    return rc;
+  /* 向 sstable 写入索引，过滤器等元数据 */
   if (rc = sstable->Final(meta_data->sha256); rc) return rc;
-  string sstable_path = meta_data->GetSSTablePath(dbname);
 
-  if (rc = temp_file->ReName(sstable_path); rc) return rc;
-  if (rc = FileManager::GetFileSize(sstable_path, &meta_data->file_size); rc)
-    return rc;
-  if (rc = temp_file->Close(); rc) return rc;
+  MLog->info("sstable {} created", sstable->GetPath());
 
-  MLog->info("sstable {} created", sstable_path);
-  delete sstable;
-  delete temp_file;
-
+  /* 填充元数据，之后用来更新索引数据 */
+  meta_data->file_size = sstable->GetFileSize();
   meta_data->min_inner_key = table_.begin()->first;
   meta_data->max_inner_key = table_.rbegin()->first;
   meta_data->num_keys = (int)table_.size();

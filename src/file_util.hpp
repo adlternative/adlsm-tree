@@ -73,6 +73,8 @@ class WritAbleFile {
   /* virtual */ RC Close();
   /* virtual */ RC Flush();
   /* virtual */ RC Sync();
+  RC ReName(string_view filename);
+
   string GetPath();
   static RC Open(string_view filename, WritAbleFile **result);
 
@@ -109,7 +111,6 @@ class SeqReadFile {
 class TempFile : public WritAbleFile {
  public:
   TempFile(const std::string &filename, int fd);
-  RC ReName(string_view filename);
   static RC Open(string_view dir_path, string_view subfix, TempFile **result);
 };
 

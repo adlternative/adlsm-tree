@@ -8,11 +8,11 @@ string_view InnerKeyToUserKey(string_view inner_key) {
   return inner_key.substr(0, inner_key.length() - 9);
 }
 
+int CmpUserKeyOfInnerKey(string_view k1, string_view k2) {
+  return InnerKeyToUserKey(k1).compare(InnerKeyToUserKey(k2));
+}
 int CmpInnerKey(string_view k1, string_view k2) {
-  int ret = InnerKeyToUserKey(k1).compare(InnerKeyToUserKey(k2));
-  if (ret) {
-    return ret;
-  }
+  if (int ret = CmpUserKeyOfInnerKey(k1, k2); ret) return ret;
   /* seq op 反过来比较 */
   return -k1.substr(k1.size() - 9).compare(k2.substr(k2.size() - 9));
 }

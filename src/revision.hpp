@@ -1,9 +1,11 @@
 #ifndef ADL_LSM_TREE_REVISION_H__
 #define ADL_LSM_TREE_REVISION_H__
 
+#include <cassert>
 #include <cstring>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -24,6 +26,10 @@ class Object {
   virtual RC Get(string_view key, string &value) = 0;
 
   string GetOid() const;
+  void Clear() {
+    memset(&sha256_, 0, sizeof(SHA256_CTX));
+    memset(&sha256_digit_, 0, SHA256_DIGEST_LENGTH * sizeof(unsigned char));
+  }
 
  protected:
   DB *db_;
@@ -76,11 +82,11 @@ struct FileMetaDataCompare {
  */
 class Level : public Object {
  public:
-  Level(DB *db);
+  Level(DB *db, int level = -1);
   Level(DB *db, int level, const string_view &oid);
   Level(const Level &);
   Level &operator=(Level &);
-  ~Level() = default;
+  virtual ~Level() = default;
   virtual RC BuildFile(string_view dbname) override;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
   virtual RC Get(string_view key, std::string &value) override;
@@ -88,10 +94,18 @@ class Level : public Object {
   void Insert(FileMetaData *file_meta);
   void Erase(FileMetaData *file_meta);
   bool Empty() const;
+  int FilesCount() const;
   int GetLevel() const;
-  void SetLevel(int level) { level_ = level; }
+  void SetLevel(int level);
   bool HaveCheckSum() const;
+  int TotalFileSize() const;
   int64_t GetMaxSeq();
+  const set<shared_ptr<FileMetaData>, FileMetaDataCompare>
+      &GetSSTableFilesMeta() const;
+  void Clear() {
+    Object::Clear();
+    files_meta_.clear();
+  }
 
  private:
   /* 文件元数据 */
@@ -117,22 +131,20 @@ class Revision : public Object {
  public:
   Revision(DB *db);
   Revision(DB *db, vector<Level> &&levels, deque<int64_t> &&log_nums_) noexcept;
-  ~Revision() = default;
+  virtual ~Revision() = default;
   virtual RC BuildFile(string_view dbname) override;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
   virtual RC Get(string_view key, std::string &value) override;
 
-  const vector<Level> &GetLevels();
+  const vector<Level> &GetLevels() const;
+  const Level &GetLevel(int i) const;
+
   void SetLevel(int level, Level *v);
-  void PushLogNumber(int64_t num) { log_nums_.push_back(num); }
-  void PopLogNumber() { log_nums_.pop_front(); }
-  const deque<int64_t> &GetLogNumbers() const { return log_nums_; }
-  int64_t GetMaxSeq() {
-    int64_t maxseq = 0;
-    for (int i = 0; i < levels_.size(); i++)
-      maxseq = max(maxseq, levels_[i].GetMaxSeq());
-    return maxseq;
-  }
+  void PushLogNumber(int64_t num);
+  void PopLogNumber();
+  const deque<int64_t> &GetLogNumbers() const;
+  int64_t GetMaxSeq();
+  int PickBestCompactionLevel();
 
  private:
   /* 层级 */

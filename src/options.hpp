@@ -11,6 +11,7 @@
 
 #include <spdlog/common.h>
 #include <stddef.h>
+#include <cassert>
 
 namespace adl {
 
@@ -39,6 +40,9 @@ struct DBOptions {
 
   /* sync */
   bool sync = false;
+
+  /* major compaction */
+  int level_files_limit = 4;
 };
 
 }  // namespace adl
