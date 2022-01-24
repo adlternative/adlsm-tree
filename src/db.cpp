@@ -145,11 +145,6 @@ RC DB::Close() {
   return OK;
 }
 
-RC DB::Sync() {
-  /* 等待 IMM?MEM?WAL? write to disk? */
-  return OK;
-}
-
 RC DB::Put(string_view key, string_view value) {
   if (auto rc = Write(key, value, OP_PUT); rc) {
     MLog->error("Put key:{} value:{} failed", key, value);

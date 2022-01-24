@@ -28,7 +28,6 @@ class DB {
   static RC Open(string_view dbname, DBOptions &options, DB **dbptr);
   static RC Destroy(string_view dbname);
   RC Close();
-  RC Sync();
   RC Put(string_view key, string_view value);
   RC Delete(string_view key);
 

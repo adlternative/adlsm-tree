@@ -21,13 +21,13 @@ Level Format:
   | ----- | ------- |
   | 1     | 3       |
 
-  | min-key len | min-key | max-key len | max-key | SHA             |
-  | ----------- | ------- | ----------- | ------- | --------------- |
-  |             | adl     |             | alskdj  | `<sstable-sha>` |
-  |             | basld   |             | caslkdj | `<sstable-sha>` |
-  |             | esakld  |             | faslkdj | `<sstable-sha>` |
-  |             | fjaskl  |             | qeku    | `<sstable-sha>` |
-  |             | ylyly   |             | zzzz    | `<sstable-sha>` |
+  | num_keys | min-key len | min-key | max-key len | max-key | SHA             |
+  | -------- | ----------- | ------- | ----------- | ------- | --------------- |
+  | 3        | 3+9         | adl     | 6+9         | alskdj  | `<sstable-sha>` |
+  | 100      | 5+9         | basld   | 7+9         | caslkdj | `<sstable-sha>` |
+  | 4        | 6+9         | esakld  | 7+9         | faslkdj | `<sstable-sha>` |
+  | 56       | 6+9         | fjaskl  | 4+9         | qeku    | `<sstable-sha>` |
+  | 7        | 5+9         | ylyly   | 4+9         | zzzz    | `<sstable-sha>` |
 
 
 

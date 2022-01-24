@@ -12,6 +12,32 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # debug 模式
 SET(CMAKE_BUILD_TYPE "Debug")
 
+
+SET(libadlsmtree_src
+    src/block.cpp
+    src/mem_table.cpp
+    src/sstable.cpp
+    src/file_util.cpp
+    src/block.cpp
+    src/filter_block.cpp
+    src/footer_block.cpp
+    src/murmur3_hash.cpp
+    src/hash_util.cpp
+    src/revision.cpp
+    src/db.cpp
+    src/keys.cpp
+    src/encode.cpp
+    src/back_ground_worker.cpp
+    src/wal.cpp
+    src/hash_util.cpp
+    src/monitor_logger.cpp)
+
+add_library(adlsmtree SHARED ${libadlsmtree_src})
+
+add_library(adlsmtree_static ${libadlsmtree_src})
+
+set_target_properties(adlsmtree_static PROPERTIES OUTPUT_NAME "adlsmtree")
+
 enable_testing()
 
 add_executable(mem_table_test
@@ -35,23 +61,7 @@ target_link_libraries(mem_table_test crypto gtest gtest_main pthread fmt spdlog 
 
 # 数据库整体测试
 add_executable(db_test
-               src/block.cpp
-               src/mem_table.cpp
-               src/sstable.cpp
-               src/file_util.cpp
-               src/block.cpp
-               src/filter_block.cpp
-               src/footer_block.cpp
-               src/murmur3_hash.cpp
-               src/hash_util.cpp
-               src/revision.cpp
-               src/db.cpp
-               src/keys.cpp
-               src/encode.cpp
-               src/back_ground_worker.cpp
-               src/wal.cpp
-               src/hash_util.cpp
-               src/monitor_logger.cpp
+               ${libadlsmtree_src}
                test/db_test.cpp)
 target_link_libraries(db_test crypto gtest gtest_main pthread fmt spdlog crc32c)
 
