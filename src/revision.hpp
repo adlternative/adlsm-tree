@@ -107,12 +107,16 @@ class Level : public Object {
     files_meta_.clear();
   }
 
+  friend ostream &operator<<(ostream &os, const Level &level);
+
  private:
   /* 文件元数据 */
   set<shared_ptr<FileMetaData>, FileMetaDataCompare> files_meta_;
   /* 第几层 */
   int level_;
 };
+
+ostream &operator<<(ostream &os, const Level &level);
 
 /**
  * @brief Revision 版本对象
@@ -145,6 +149,7 @@ class Revision : public Object {
   const deque<int64_t> &GetLogNumbers() const;
   int64_t GetMaxSeq();
   int PickBestCompactionLevel();
+  friend ostream &operator<<(ostream &os, const Revision &rev);
 
  private:
   /* 层级 */
@@ -152,6 +157,7 @@ class Revision : public Object {
   /* 不需要持久化到 revsion file;而是持久化到 current file */
   deque<int64_t> log_nums_;
 };
+ostream &operator<<(ostream &os, const Revision &rev);
 
 }  // namespace adl
 

@@ -429,32 +429,157 @@ TEST(db, test_compaction) {
             << "ms\n";
 
   ASSERT_EQ(db->Close(), OK);
+  delete db;
 
-  // beginTime = std::chrono::high_resolution_clock::now();
-  // ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
-  // endTime = std::chrono::high_resolution_clock::now();
+  beginTime = std::chrono::high_resolution_clock::now();
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+  endTime = std::chrono::high_resolution_clock::now();
 
-  // std::cout << "open time: "
-  //           << std::chrono::duration_cast<std::chrono::milliseconds>(endTime
-  //           -
-  //                                                                    beginTime)
-  //                  .count()
-  //           << "ms\n";
+  std::cout << "open time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                     beginTime)
+                   .count()
+            << "ms\n";
 
-  // beginTime = std::chrono::high_resolution_clock::now();
-  // for (int i = 0; i < 300000; i++) {
-  //   string key = "key" + to_string(i);
-  //   string val;
-  //   ASSERT_EQ(db->Get(key, val), OK) << "get error";
-  //   ASSERT_EQ(val, "value" + to_string(i));
-  // }
-  // endTime = std::chrono::high_resolution_clock::now();
-  // std::cout << "get time: "
-  //           << std::chrono::duration_cast<std::chrono::milliseconds>(endTime
-  //           -
-  //                                                                    beginTime)
-  //                  .count()
-  //           << "ms\n";
+  beginTime = std::chrono::high_resolution_clock::now();
+  db->Debug();
+  for (int i = 0; i < 300000; i++) {
+    string key = "key" + to_string(i);
+    string val;
+    ASSERT_EQ(db->Get(key, val), OK) << fmt::format("bach {} get error", i);
+    ASSERT_EQ(val, "value" + to_string(i));
+  }
+  endTime = std::chrono::high_resolution_clock::now();
+  std::cout << "get time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                     beginTime)
+                   .count()
+            << "ms\n";
 
-  // ASSERT_EQ(db->Close(), OK);
+  // db->Debug();
+
+  ASSERT_EQ(db->Close(), OK);
+}
+
+TEST(db, test_compaction2) {
+  using namespace adl;
+  DB *db = nullptr;
+  DBOptions opts;
+  opts.mem_table_max_size = 1UL << 20; /* 1MB */
+
+  string dbname = "~/adldb";
+  opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+
+  defer _([&]() {
+    if (db) delete db;
+  });
+
+  std::chrono::high_resolution_clock::time_point beginTime =
+      std::chrono::high_resolution_clock::now();
+
+  for (int i = 0; i < 300000; i++) {
+    string key = "key";
+    string val = "value" + to_string(i);
+    ASSERT_EQ(db->Put(key, val), OK) << "put error";
+  }
+
+  std::chrono::high_resolution_clock::time_point endTime =
+      std::chrono::high_resolution_clock::now();
+  std::cout << "write time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                     beginTime)
+                   .count()
+            << "ms\n";
+
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+
+  string key = "key";
+  string val;
+  ASSERT_EQ(db->Get(key, val), OK) << "get error";
+  ASSERT_EQ(val, "value299999");
+  // db->Debug();
+  ASSERT_EQ(db->Close(), OK);
+}
+
+TEST(db, test_compaction3) {
+  using namespace adl;
+  DB *db = nullptr;
+  DBOptions opts;
+  opts.mem_table_max_size = 1UL << 14; /* 64KB */
+
+  string dbname = "~/adldb";
+  opts.create_if_not_exists = true;
+  if (FileManager::Exists(dbname)) FileManager::Destroy(dbname);
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+
+  defer _([&]() {
+    if (db) delete db;
+  });
+
+  auto beginTime = std::chrono::high_resolution_clock::now();
+
+  for (int i = 0; i < 300000; i++) {
+    string key = fmt::format("key{}", i);
+    string val = fmt::format("value{}", i);
+    ASSERT_EQ(db->Put(key, val), OK) << fmt::format("batch {} put error", i);
+    ASSERT_EQ(db->Delete(key), OK) << fmt::format("batch {} delete error", i);
+    val = fmt::format("value{}", i * 2);
+    ASSERT_EQ(db->Put(key, val), OK) << fmt::format("batch {} put 2* error", i);
+    ;
+  }
+
+  auto endTime = std::chrono::high_resolution_clock::now();
+  std::cout << "write time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                     beginTime)
+                   .count()
+            << "ms\n";
+
+  ASSERT_EQ(db->Close(), OK);
+  delete db;
+
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+
+  beginTime = std::chrono::high_resolution_clock::now();
+
+  for (int i = 0; i < 300000; i++) {
+    string key = fmt::format("key{}", i);
+    string val;
+    auto rc = db->Get(key, val);
+    ASSERT_EQ(rc, OK) << fmt::format("batch {} get error with {}", i,
+                                     strrc(rc));
+    ASSERT_EQ(val, fmt::format("value{}", i * 2));
+  }
+
+  endTime = std::chrono::high_resolution_clock::now();
+  std::cout << "read time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                     beginTime)
+                   .count()
+            << "ms\n";
+
+  ASSERT_EQ(db->Close(), OK);
+}
+
+TEST(db, test_debug_sstable) {
+  using namespace adl;
+  DB *db = nullptr;
+  DBOptions opts;
+  opts.mem_table_max_size = 1UL << 20; /* 1MB */
+  string dbname = "~/adldb";
+  opts.create_if_not_exists = true;
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+
+  defer _([&]() {
+    if (db) delete db;
+  });
+  // db->DebugSSTable(
+  // "776d6fe1b4b1f6a9b745a17ee5123fba23606f6a525d7743c3040a981ce761b6");
+  // db->DebugSSTable(
+  //     "dbd0619eca24cf8cd978dfbae93ce4407a7cbbec1dd7162ab7e4a6ceb56f61c0");
 }

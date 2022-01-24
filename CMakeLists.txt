@@ -104,7 +104,9 @@ add_executable(file_util_test
                src/file_util.cpp
                src/monitor_logger.cpp
                src/wal.cpp
+               src/keys.cpp
                src/hash_util.cpp
+               src/encode.cpp
                test/file_util_test.cpp)
 target_link_libraries(file_util_test gtest gtest_main pthread spdlog fmt crc32c)
 

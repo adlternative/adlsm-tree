@@ -34,6 +34,9 @@ class DB {
 
   RC Get(string_view key, std::string &value);
 
+  void Debug();
+  RC DebugSSTable(string_view oid);
+
  private:
   RC Write(string_view key, string_view value, OpType op);
   RC MaybeDoCompaction();

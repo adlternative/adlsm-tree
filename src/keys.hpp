@@ -64,12 +64,13 @@ OpType InnerKeyOpType(string_view inner_key);
 int CmpInnerKey(string_view k1, string_view k2);
 int CmpUserKeyOfInnerKey(string_view k1, string_view k2);
 int CmpKeyAndUserKey(string_view key, string_view user_key);
-RC SaveResultValueIfUserKeyMatch(string_view rk, string_view rv, string_view tk,
-                                 string &dv);
+RC SaveResultIfUserKeyMatch(string_view rk, string_view rv, string_view tk,
+                                 string &dk, string &dv);
 string NewMinInnerKey(string_view key);
 
 int EasyCmp(std::string_view key1, std::string_view key2);
-adl::RC EasySave(string_view rk, string_view rv, string_view tk, string &dv);
+adl::RC EasySaveValue(string_view rk, string_view rv, string_view tk, string &dk,
+                 string &dv);
 
 string EncodeKVPair(const MemKey &key, string_view value);
 void DecodeKVPair(string_view data, MemKey &memkey, string &value);

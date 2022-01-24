@@ -8,6 +8,7 @@
 #include <vector>
 #include "keys.hpp"
 #include "rc.hpp"
+#include <fmt/ostream.h>
 
 namespace adl {
 
@@ -157,11 +158,13 @@ struct FileMetaData {
 
   /* 获取在 db 中的 file 路径 */
   string GetSSTablePath(string_view dbname);
-
+  string GetOid() const;
   bool operator<(const FileMetaData &f) {
     return min_inner_key < f.min_inner_key;
   }
 };
+
+ostream &operator<<(ostream &os, const FileMetaData &meta);
 
 ssize_t write_n(int fd, const char *buf, size_t len);
 ssize_t read_n(int fd, const char *buf, size_t len);

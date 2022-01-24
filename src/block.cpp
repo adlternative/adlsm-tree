@@ -72,7 +72,7 @@ bool BlockWriter::Empty() { return !entries_len_; }
 RC BlockReader::Init(
     string_view data, std::function<int(string_view, string_view)> &&cmp,
     std::function<RC(string_view, string_view, string_view innner_key,
-                     string &value)> &&handle_result) {
+                     string &key, string &value)> &&handle_result) {
   cmp_fn_ = std::move(cmp);
   handle_result_fn_ = std::move(handle_result);
   data_ = data;
@@ -156,10 +156,12 @@ RC BlockReader::GetInternal(
 }
 
 /* block 内部点查 */
-RC BlockReader::Get(string_view innner_key, string &value) {
+RC BlockReader::Get(string_view want_inner_key, string &key, string &value) {
   return GetInternal(
-      innner_key, [&](string_view result_key, string_view result_value) -> RC {
-        return handle_result_fn_(result_key, result_value, innner_key, value);
+      want_inner_key,
+      [&](string_view result_key, string_view result_value) -> RC {
+        return handle_result_fn_(result_key, result_value, want_inner_key, key,
+                                 value);
       });
 }
 

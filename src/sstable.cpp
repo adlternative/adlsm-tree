@@ -145,7 +145,8 @@ RC SSTableReader::ReadIndexBlock() {
                 index_block_handle.block_size_);
     return rc;
   }
-  if (rc = index_block_reader_->Init(index_block_buffer, CmpInnerKey, EasySave);
+  if (rc = index_block_reader_->Init(index_block_buffer, CmpInnerKey,
+                                     EasySaveValue);
       rc) {
     MLog->error("Init index block error: {}", strrc(rc));
     return rc;
@@ -167,7 +168,8 @@ RC SSTableReader::ReadMetaBlock() {
                 meta_block_handle.block_offset_, meta_block_handle.block_size_);
     return rc;
   }
-  if (rc = meta_block_reader_->Init(meta_block_buffer, EasyCmp, EasySave); rc) {
+  if (rc = meta_block_reader_->Init(meta_block_buffer, EasyCmp, EasySaveValue);
+      rc) {
     MLog->error("Init meta block error: {}", strrc(rc));
     return rc;
   }
@@ -178,9 +180,12 @@ RC SSTableReader::ReadFilterBlock() {
   RC rc = OK;
   BlockHandle filter_block_handle;
   string filter_block_handle_buffer;
+  string used_meta_key;
   string_view filter_block_buffer;
 
-  if (rc = meta_block_reader_->Get("filter", filter_block_handle_buffer); rc) {
+  if (rc = meta_block_reader_->Get("filter", used_meta_key,
+                                   filter_block_handle_buffer);
+      rc) {
     MLog->error("Get filter block handle error: {}", strrc(rc));
     return rc;
   }
@@ -225,7 +230,7 @@ RC SSTableReader::Open(MmapReadAbleFile *file, SSTableReader **table,
 }
 
 /* 在 sstable 内点查 */
-RC SSTableReader::Get(string_view inner_key, string &value) {
+RC SSTableReader::Get(string_view inner_key, string &key, string &value) {
   RC rc = OK;
   // MLog->trace("SSTableReader want Get key {}", key);
 
@@ -237,8 +242,10 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
 
   /* index 搜索 高键 */
   string data_block_handle_data;
+  string unused_index_key;
 
-  if (auto rc = index_block_reader_->Get(inner_key, data_block_handle_data);
+  if (auto rc = index_block_reader_->Get(inner_key, unused_index_key,
+                                         data_block_handle_data);
       rc) {
     MLog->info("the key {} out range of this table",
                InnerKeyToUserKey(inner_key));
@@ -256,7 +263,7 @@ RC SSTableReader::Get(string_view inner_key, string &value) {
   if (rc) return rc;
 
   /* read from data block */
-  return data_block_reader->Get(inner_key, value);
+  return data_block_reader->Get(inner_key, key, value);
 }
 
 RC SSTableReader::GetBlockReader(BlockHandle &data_block_handle,
@@ -278,7 +285,7 @@ RC SSTableReader::GetBlockReader(BlockHandle &data_block_handle,
     }
     data_block_reader = make_shared<BlockReader>();
     if (rc = data_block_reader->Init(data_block_buffer, CmpInnerKey,
-                                     SaveResultValueIfUserKeyMatch);
+                                     SaveResultIfUserKeyMatch);
         rc) {
       MLog->error("data_block_reader Init error: {}", strrc(rc));
       return rc;

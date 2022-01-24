@@ -1,5 +1,6 @@
 #include "file_util.hpp"
 #include <fcntl.h>
+#include <fmt/ostream.h>
 #include <linux/limits.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -517,6 +518,8 @@ string FileMetaData::GetSSTablePath(string_view dbname) {
   return SstFile(SstDir(dbname), sha256_digit_to_hex(sha256));
 }
 
+string FileMetaData::GetOid() const { return sha256_digit_to_hex(sha256); }
+
 RC FileManager::GetFileSize(string_view path, size_t *size) {
   struct stat file_stat;
   if (stat(path.data(), &file_stat)) {
@@ -606,4 +609,13 @@ RC ParseWalFile(string_view filename, int64_t &seq) {
 }
 
 std::string WritAbleFile::GetPath() { return file_path_; }
+std::ostream &operator<<(ostream &os, const FileMetaData &meta) {
+  os << fmt::format(
+      "@FileMetaData[ file_size={}, num_keys={}, belong_to_level={}, "
+      "max_inner_key={} "
+      "min_inner_key={}, sha256={} ]\n",
+      meta.file_size, meta.num_keys, meta.belong_to_level, meta.max_inner_key,
+      meta.min_inner_key, sha256_digit_to_hex(meta.sha256));
+  return os;
+}
 }  // namespace adl

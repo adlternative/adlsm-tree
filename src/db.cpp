@@ -1,4 +1,5 @@
 #include "db.hpp"
+#include <fmt/ostream.h>
 #include <openssl/sha.h>
 #include <atomic>
 #include <cstdint>
@@ -177,14 +178,14 @@ RC DB::Get(string_view key, std::string &value) {
   /* 1. memtable */
   rc = mem->Get(key, value);
   if (!rc) {
-    MLog->debug("Get key {} hint in memtable", key);
+    MLog->debug("Get key {} hit in memtable", key);
     return rc;
   }
   /* 2. imemtable */
   if (imem) {
     rc = imem->GetNoLock(key, value);
     if (!rc) {
-      MLog->debug("Get key {} hint in imemtable", key);
+      MLog->debug("Get key {} hit in imemtable", key);
       return rc;
     }
   }
@@ -198,6 +199,24 @@ RC DB::Get(string_view key, std::string &value) {
   }
   /* 4. 读是否需要更新元数据？ */
   return NOT_FOUND;
+}
+
+void DB::Debug() { MLog->info("@DB [current_rev_:{}\n]\n", *current_rev_); }
+RC DB::DebugSSTable(string_view oid) {
+  shared_ptr<SSTableReader> sstable;
+  auto rc = GetSSTableReader(string(oid), sstable);
+  if (rc) return rc;
+
+  auto cur_iter = sstable->begin();
+  auto end_iter = sstable->end();
+  MLog->info("oid:{}", oid);
+  for (; cur_iter != end_iter; ++cur_iter) {
+    if (!cur_iter.Valid()) cur_iter.Fetch();
+    MemKey memkey;
+    memkey.FromKey(cur_iter.Key());
+    MLog->info("key:{} value:{}\n", memkey, cur_iter.Value());
+  }
+  return OK;
 }
 
 /* 目前写入的并发策略是整个 Write Db锁，因为想要保护 memtable
@@ -407,7 +426,7 @@ RC DB::DoMajorCompaction() {
 struct MergeCmp {
   bool operator()(const SSTableReader::Iterator &lhs,
                   const SSTableReader::Iterator &rhs) {
-    return CmpInnerKey(lhs.Key(), rhs.Key()) < 0;
+    return CmpInnerKey(lhs.Key(), rhs.Key()) > 0;
   }
 };
 
@@ -421,6 +440,9 @@ RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
 
   /* 将所有 LN 的 sstable 的 begin() 迭代器加入到优先队列中 */
   const auto &files_meta = level.GetSSTableFilesMeta();
+
+  MLog->info("DB merge runs on {}", level);
+
   for (auto iter = files_meta.rbegin(); iter != files_meta.rend(); ++iter) {
     auto &file_meta = *iter;
     shared_ptr<SSTableReader> sstable;
@@ -453,18 +475,17 @@ RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
 
     iter_pq.pop();
     /* 如果 user_key 部分和前一个 key 是相同的,那么我们应当将它抛弃 */
-    if (!last_key.empty() && !CmpUserKeyOfInnerKey(last_key, cur_key)) continue;
-
-    /* 目前最后一层的逻辑还是 tiering 后面改成 leveling 后可以删除墓碑 */
-    rc = merge_sstable_writer->Add(cur_key, cur_value);
-    if (rc) return rc;
-    /* 记录第一个 key 后面需要保存 */
-    if (!count) min_key.FromKey(cur_key);
+    if (last_key.empty() || CmpUserKeyOfInnerKey(last_key, cur_key)) {
+      /* 目前最后一层的逻辑还是 tiering 后面改成 leveling 后可以删除墓碑 */
+      rc = merge_sstable_writer->Add(cur_key, cur_value);
+      if (rc) return rc;
+      /* 记录第一个 key 后面需要保存 */
+      if (!count) min_key.FromKey(cur_key);
+      count++;
+    }
 
     last_key = cur_key;
-    count++;
     cur++;
-
     /* 如果这个 sstable 还没有到结尾则继续将迭代器加入到优先队列中 */
     if (cur != cur.GetContainerEnd()) {
       if (!cur.Valid()) cur.Fetch();
@@ -483,6 +504,9 @@ RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
   meta_data->num_keys = count;
   /* 目前 minor compaction 生成的 sstable 就放在 l0 */
   meta_data->belong_to_level = level.GetLevel() + 1;
+
+  MLog->info("DB merge runs to {}", *meta_data);
+
   *meta_data_pointer = meta_data;
   return rc;
 }

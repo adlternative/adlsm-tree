@@ -129,16 +129,17 @@ TEST(block_test, Get1) {
   block.Final(result);
   block.Reset();
   string value;
+  string _;
   RC rc = OK;
 
-  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
-  rc = block_reader.Get("key0", value);
+  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySaveValue), OK);
+  rc = block_reader.Get("key0", _, value);
   ASSERT_EQ(rc, OK) << strrc(rc);
   EXPECT_EQ(value, "v0");
-  rc = block_reader.Get("key1", value);
+  rc = block_reader.Get("key1", _, value);
   ASSERT_EQ(rc, OK) << strrc(rc);
   EXPECT_EQ(value, "v1");
-  rc = block_reader.Get("key2", value);
+  rc = block_reader.Get("key2", _, value);
   ASSERT_EQ(rc, OK) << strrc(rc);
   EXPECT_EQ(value, "v2");
 }
@@ -149,6 +150,7 @@ TEST(block_test, Get2) {
   BlockReader block_reader;
   map<string, string> m;
   string result;
+  string _;
   RC rc = OK;
   for (int i = 0; i < 20; i++) {
     string key("key");
@@ -162,7 +164,7 @@ TEST(block_test, Get2) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
+  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySaveValue), OK);
 
   for (int i = 0; i < 20; i++) {
     string key("key");
@@ -170,7 +172,7 @@ TEST(block_test, Get2) {
     string value;
     string expect("value");
     expect += std::to_string(i);
-    rc = block_reader.Get(key, value);
+    rc = block_reader.Get(key, _, value);
     ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
     EXPECT_EQ(value, expect);
   }
@@ -195,7 +197,8 @@ TEST(block_test, Get3) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySave), OK);
+  string _;
+  ASSERT_EQ(block_reader.Init(result, EasyCmp, EasySaveValue), OK);
 
   for (int i = 0; i < 2000; i++) {
     string key("key");
@@ -203,7 +206,7 @@ TEST(block_test, Get3) {
     string value;
     string expect("value");
     expect += std::to_string(i);
-    rc = block_reader.Get(key, value);
+    rc = block_reader.Get(key, _, value);
     ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
     EXPECT_EQ(value, expect);
   }
@@ -235,9 +238,9 @@ TEST(block_test, Get4) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(
-      block_reader.Init(result, CmpInnerKey, SaveResultValueIfUserKeyMatch),
-      OK);
+  ASSERT_EQ(block_reader.Init(result, CmpInnerKey, SaveResultIfUserKeyMatch),
+            OK);
+  string _;
 
   for (int i = 0; i < 2000; i++) {
     string key("key");
@@ -246,7 +249,7 @@ TEST(block_test, Get4) {
     string value;
     string expect("value");
     expect += std::to_string(i);
-    rc = block_reader.Get(inner_key, value);
+    rc = block_reader.Get(inner_key, _, value);
     ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
     EXPECT_EQ(value, expect);
   }
@@ -256,7 +259,7 @@ TEST(block_test, Get4) {
     key += std::to_string(2000 + i);
     auto inner_key = NewMinInnerKey(key);
     string value;
-    rc = block_reader.Get(inner_key, value);
+    rc = block_reader.Get(inner_key, _, value);
     ASSERT_EQ(rc, NOT_FOUND) << "batch " << i << ": " << strrc(rc);
   }
 
@@ -265,7 +268,7 @@ TEST(block_test, Get4) {
     key += std::to_string(-1 - i);
     auto inner_key = NewMinInnerKey(key);
     string value;
-    rc = block_reader.Get(inner_key, value);
+    rc = block_reader.Get(inner_key, _, value);
     ASSERT_EQ(rc, NOT_FOUND) << "batch " << i << ": " << strrc(rc);
   }
 
@@ -276,7 +279,7 @@ TEST(block_test, Get4) {
     string value;
     string expect("value");
     expect += std::to_string(i);
-    rc = block_reader.Get(inner_key, value);
+    rc = block_reader.Get(inner_key, _, value);
     ASSERT_EQ(rc, OK) << "batch " << i << ": " << strrc(rc);
     EXPECT_EQ(value, expect);
   }
@@ -308,12 +311,13 @@ TEST(block_test, Iterator) {
   block.Final(result);
   block.Reset();
 
-  ASSERT_EQ(block_reader->Init(result, EasyCmp, EasySave), OK);
+  ASSERT_EQ(block_reader->Init(result, EasyCmp, EasySaveValue), OK);
   int i = 0;
   for (auto iter = block_reader->begin(); iter != block_reader->end();
        iter++, i++) {
     if (!iter.Valid()) iter.Fetch();
-    ASSERT_TRUE(iter.Valid())<< fmt::format("batch {}", i);;
+    ASSERT_TRUE(iter.Valid()) << fmt::format("batch {}", i);
+    ;
     // fmt::print("{} {}\n",iter.Key(),iter.Value());
     EXPECT_EQ(iter.Key(), vk[i].first) << fmt::format("batch {}", i);
     EXPECT_EQ(iter.Value(), vk[i].second) << fmt::format("batch {}", i);

@@ -201,7 +201,7 @@ class SSTableReader : public enable_shared_from_this<SSTableReader> {
 
   static RC Open(MmapReadAbleFile *file, SSTableReader **table,
                  const string &oid, DB *db = nullptr);
-  RC Get(string_view key, string &value);
+  RC Get(string_view want_key, string &key, string &value);
   string GetFileName();
 
   SSTableReader(MmapReadAbleFile *file, const string &oid, DB *db = nullptr);

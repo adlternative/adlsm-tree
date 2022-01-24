@@ -14,7 +14,14 @@ int CmpUserKeyOfInnerKey(string_view k1, string_view k2) {
 int CmpInnerKey(string_view k1, string_view k2) {
   if (int ret = CmpUserKeyOfInnerKey(k1, k2); ret) return ret;
   /* seq op 反过来比较 */
-  return -k1.substr(k1.size() - 9).compare(k2.substr(k2.size() - 9));
+  int64_t seq1 = *(int64_t *)(k1.substr(k1.size() - 9, 8).data());
+  int64_t seq2 = *(int64_t *)(k2.substr(k2.size() - 9, 8).data());
+  if (seq1 == seq2) {
+    OpType op1 = (OpType) * (char *)(k1.substr(k1.size() - 1, 1).data());
+    OpType op2 = (OpType) * (char *)(k2.substr(k2.size() - 1, 1).data());
+    return op2 - op1;
+  }
+  return seq2 - seq1 > 0 ? 1 : -1;
 }
 
 int CmpKeyAndUserKey(string_view key, string_view user_key) {
@@ -22,10 +29,11 @@ int CmpKeyAndUserKey(string_view key, string_view user_key) {
   return key_user_key.compare(user_key);
 }
 
-RC SaveResultValueIfUserKeyMatch(string_view rk, string_view rv, string_view tk,
-                                 string &dv) {
+RC SaveResultIfUserKeyMatch(string_view rk, string_view rv, string_view tk,
+                            string &dk, string &dv) {
   if (InnerKeyToUserKey(rk).compare(InnerKeyToUserKey(tk))) return NOT_FOUND;
   if (InnerKeyOpType(rk) == OP_DELETE) return NOT_FOUND;
+  dk.assign(rk.data(), rk.length());
   dv.assign(rv.data(), rv.length());
   return OK;
 }
@@ -34,7 +42,8 @@ MemKey::MemKey(string_view str, int64_t seq, OpType op_type)
     : user_key_(str), seq_(seq), op_type_(op_type) {}
 
 ostream &operator<<(ostream &os, const MemKey &key) {
-  return os << fmt::format("{} {} {}", key.user_key_, key.seq_,
+  return os << fmt::format("@MemKey [user_key_:{} seq_:{} op_type_:{}]",
+                           key.user_key_, key.seq_,
                            key.op_type_ ? "OP_DELETE" : "OP_PUT");
 }
 
@@ -93,7 +102,10 @@ string NewMinInnerKey(string_view key) {
 int EasyCmp(std::string_view key1, std::string_view key2) {
   return key1.compare(key2);
 }
-adl::RC EasySave(string_view rk, string_view rv, string_view tk, string &dv) {
+
+adl::RC EasySaveValue(string_view rk, string_view rv, string_view tk,
+                      string &dk, string &dv) {
+  // dk.assign(rk.data(), rk.length());
   dv.assign(rv.data(), rv.length());
   return adl::OK;
 }

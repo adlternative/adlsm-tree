@@ -113,7 +113,8 @@ TEST(sstable, sstable_reader) {
     string key = "key" + to_string(i);
     string val;
     string inner_key = NewMinInnerKey(key);
-    auto rc = sstable->Get(inner_key, val);
+    string _;
+    auto rc = sstable->Get(inner_key, _, val);
     EXPECT_EQ(rc, OK) << "Get " << key << " error";
     if (rc == OK) {
       std::cout << "KEY " << key << "VAL " << val << std::endl;
@@ -124,7 +125,8 @@ TEST(sstable, sstable_reader) {
     string key = "key" + to_string(10000 + i);
     string val;
     string inner_key = NewMinInnerKey(key);
-    auto rc = sstable->Get(inner_key, val);
+    string _;
+    auto rc = sstable->Get(inner_key, _, val);
     EXPECT_EQ(rc, NOT_FOUND)
         << "Get error: KEY " << key << "VAL " << val << " should not be found";
     if (rc == OK) {
@@ -154,7 +156,8 @@ TEST(sstable, sstable_reader2) {
     string key = "key" + to_string(i);
     string val;
     string inner_key = NewMinInnerKey(key);
-    auto rc = sstable->Get(inner_key, val);
+    string _;
+    auto rc = sstable->Get(inner_key, _, val);
     EXPECT_EQ(rc, NOT_FOUND)
         << "Get error: KEY " << key << "VAL " << val << " should not be found";
     if (rc == OK)
@@ -186,7 +189,8 @@ TEST(sstable, sstable_reader3) {
     string key = "key" + to_string(i);
     string val;
     string inner_key = NewMinInnerKey(key);
-    auto rc = sstable->Get(inner_key, val);
+    string _;
+    auto rc = sstable->Get(inner_key, _, val);
     EXPECT_EQ(rc, OK) << "Get " << key << " error";
     if (rc == OK) EXPECT_EQ(val, "value" + to_string(i * 2 + 1));
   }
@@ -212,7 +216,8 @@ TEST(sstable, sstable_reader4) {
   string key = "key";
   string val;
   string inner_key = NewMinInnerKey(key);
-  rc = sstable->Get(inner_key, val);
+  string _;
+  rc = sstable->Get(inner_key, _, val);
   EXPECT_EQ(rc, OK) << "Get " << key << " error";
   if (rc == OK) EXPECT_EQ(val, "value5000");
 
@@ -248,7 +253,7 @@ TEST(sstable, Iterator) {
     memkey.FromKey(iter.Key());
     EXPECT_EQ(
         fmt::format("{} {}", memkey, iter.Value()),
-        fmt::format("key {} {} {}", 10000 - i, i % 2 ? "OP_DELETE" : "OP_PUT",
+        fmt::format("@MemKey [user_key_:key seq_:{} op_type_:{}] {}", 10000 - i, i % 2 ? "OP_DELETE" : "OP_PUT",
                     i % 2 ? "" : "value" + to_string((10000 - i) / 2)));
   }
 

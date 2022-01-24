@@ -249,9 +249,11 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
 
 RC Level::Get(string_view key, string &value) {
   RC rc = NOT_FOUND;
-  if (level_) return UN_IMPLEMENTED;
   MemKey mk = MemKey::NewMinMemKey(key);
   string inner_key = mk.ToKey();
+  string result_key;
+  string result_value;
+  string min_key;
 
   if (!files_meta_.size()) {
     MLog->debug("not file in level {}?", GetOid());
@@ -261,11 +263,13 @@ RC Level::Get(string_view key, string &value) {
 
   for (auto iter = files_meta_.rbegin(); iter != files_meta_.rend(); ++iter) {
     auto &file_meta = *iter;
-    if (mk < file_meta->min_inner_key &&
-        mk.user_key_ != file_meta->min_inner_key.user_key_)
+    /* 不在范围内的 key 不考虑 */
+    if ((mk < file_meta->min_inner_key &&
+         mk.user_key_ != file_meta->min_inner_key.user_key_) ||
+        file_meta->max_inner_key < mk) {
+      MLog->info("Get key {} skip {}", key, file_meta->GetOid());
       continue;
-    if (file_meta->max_inner_key < mk) continue;
-
+    }
     shared_ptr<SSTableReader> sstable;
     rc = db_->GetSSTableReader(sha256_digit_to_hex(file_meta->sha256), sstable);
     if (rc) {
@@ -274,14 +278,20 @@ RC Level::Get(string_view key, string &value) {
     }
 
     /* TODO(adl): use seq 实现 snapshot read */
-    rc = sstable->Get(inner_key, value);
+
+    rc = sstable->Get(inner_key, result_key, result_value);
     if (rc == NOT_FOUND) {
-      MLog->debug("Get key {} from file {} miss", key, sstable->GetFileName());
+      MLog->info("Get key {} miss from {}", key, file_meta->GetOid());
       continue;
     }
-    return rc;
+    if (min_key.empty() || CmpInnerKey(result_key, min_key) < 0) {
+      min_key = result_key;
+      value = result_value;
+    }
+    /* 在 tiering 层内必须考虑扫描所有的 sstable
+    选出 key 最小的项返回 */
   }
-  return rc;
+  return min_key.empty() ? NOT_FOUND : OK;
 }
 
 int64_t Level::GetMaxSeq() {
@@ -369,7 +379,11 @@ RC Revision::Get(string_view key, std::string &value) {
   for (int i = 0; i < 5 && rc == NOT_FOUND; ++i) {
     if (levels_[i].Empty()) continue;
     rc = levels_[i].Get(key, value);
-    if (rc == NOT_FOUND) MLog->debug("Get key {} level {} miss", key, i);
+    /* 如果在某一层找到了则可以直接返回 */
+    if (rc == NOT_FOUND)
+      MLog->info("Get key {} miss in level {}", key, i);
+    else if (rc == OK)
+      MLog->info("Get key {} hit in level {}", key, i);
   }
   return rc;
 }
@@ -398,5 +412,25 @@ int64_t Revision::GetMaxSeq() {
 const std::set<shared_ptr<FileMetaData>, FileMetaDataCompare>
     &Level::GetSSTableFilesMeta() const {
   return files_meta_;
+}
+
+std::ostream &operator<<(ostream &os, const Level &level) {
+  os << "@Level[ files_meta_: ";
+  for (auto &file_meta_ : level.files_meta_)
+    os << fmt::format("{}\n", *file_meta_);
+  os << " ]";
+  return os;
+}
+
+std::ostream &operator<<(ostream &os, const Revision &rev) {
+  os << "@Revision[";
+  os << "log_nums_:";
+  for (auto i : rev.log_nums_) os << i << " ";
+  os << "\n";
+  for (int i = 0; i < rev.levels_.size(); i++)
+    os << fmt::format("level[{}]:{}\n", i, rev.levels_[i]);
+
+  os << " ]";
+  return os;
 }
 }  // namespace adl

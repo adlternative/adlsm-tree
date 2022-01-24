@@ -118,11 +118,12 @@ class BlockReader : public enable_shared_from_this<BlockReader> {
 
   BlockReader() = default;
   RC Init(string_view data, std::function<int(string_view, string_view)> &&cmp,
-          std::function<RC(string_view, string_view, string_view innner_key,
+          std::function<RC(string_view result_key, string_view result_value,
+                           string_view want_inner_key, string &key,
                            string &value)> &&handle_result);
 
   /* 点查 */
-  RC Get(string_view key, string &value);
+  RC Get(string_view want_key, string &key, string &value);
 
  private:
   RC BsearchRestartPoint(string_view key, int *index);
@@ -136,8 +137,7 @@ class BlockReader : public enable_shared_from_this<BlockReader> {
   size_t restarts_offset_;
   std::vector<int> restarts_;  //  重启点
   std::function<int(string_view, string_view)> cmp_fn_;
-  std::function<RC(string_view, string_view, string_view innner_key,
-                   string &value)>
+  std::function<RC(string_view, string_view, string_view, string &, string &)>
       handle_result_fn_;
 };
 
