@@ -41,13 +41,15 @@ Level Format:
   | ----- | ------- |
   | 1     | 3       |
 
-  | num_keys | min-key len | min-key | max-key len | max-key | SHA             |
-  | -------- | ----------- | ------- | ----------- | ------- | --------------- |
-  | 3        | 3+9         | adl     | 6+9         | alskdj  | `<sstable-sha>` |
-  | 100      | 5+9         | basld   | 7+9         | caslkdj | `<sstable-sha>` |
-  | 4        | 6+9         | esakld  | 7+9         | faslkdj | `<sstable-sha>` |
-  | 56       | 6+9         | fjaskl  | 4+9         | qeku    | `<sstable-sha>` |
-  | 7        | 5+9         | ylyly   | 4+9         | zzzz    | `<sstable-sha>` |
+  | num-keys | max-seq | min-key len | min-key | max-key len | max-key | SHA             |
+  | -------- | ------- | ----------- | ------- | ----------- | ------- | --------------- |
+  | 3        | 5       | 3+9         | adl     | 6+9         | alskdj  | `<sstable-sha>` |
+  | 100      | 10      | 5+9         | basld   | 7+9         | caslkdj | `<sstable-sha>` |
+  | 4        | 15      | 6+9         | esakld  | 7+9         | faslkdj | `<sstable-sha>` |
+  | 56       | 20      | 6+9         | fjaskl  | 4+9         | qeku    | `<sstable-sha>` |
+  | 7        | 25      | 5+9         | ylyly   | 4+9         | zzzz    | `<sstable-sha>` |
+
+(注意上图中的 `min-key` 和 `max-key` 没有画出其 `seq` 和 `op_type`)
 
 ### revision 对象
 `revision` 对象会记录每一层的层级和每一层 `level` 对象的 `SHA256`。

@@ -336,6 +336,26 @@ TEST(db, test_db_reopen3) {
   delete db;
 }
 
+TEST(db, test_db_reopen4) {
+  DB *db = nullptr;
+  DBOptions opts;
+  string dbname = "/tmp/adl-testdb1";
+  opts.create_if_not_exists = true;
+
+  ASSERT_EQ(DB::Open(dbname, opts, &db), OK);
+
+  defer _([&]() {
+    if (db) delete db;
+  });
+
+  for (int i = 0; i < 300000; i++) {
+    string key = "key" + to_string(i);
+    string val;
+    ASSERT_EQ(db->Get(key, val), OK) << "get error";
+    ASSERT_EQ(val, "value" + to_string(i));
+  }
+}
+
 TEST(db, test_db_put_get_and_reopen_get4) {
   using namespace adl;
   DB *db = nullptr;

@@ -58,14 +58,19 @@ RC MemTable::BuildSSTable(string_view dbname,
   string true_path = FileManager::FixDirName(dbname);
   dbname = true_path;
   FileMetaData *meta_data = new FileMetaData;
+  int64_t max_seq = 0;
 
   /* 一个新的 sstable writer */
   auto sstable_ok = NewSSTableWriter(dbname, options_);
-  if (!sstable_ok) return NEW_SSTABLE_ERROR;
+  if (!sstable_ok) {
+    delete meta_data;
+    return NEW_SSTABLE_ERROR;
+  }
   auto sstable = std::move(sstable_ok.value());
 
   /* 向 sstable 写入 memtable 的所有数据 */
   RC rc = ForEachNoLock([&](const MemKey &memkey, string_view value) -> RC {
+    if (max_seq < memkey.seq_) max_seq = memkey.seq_;
     string key = memkey.ToKey();
     return sstable->Add(key, value);
   });
@@ -80,6 +85,7 @@ RC MemTable::BuildSSTable(string_view dbname,
   meta_data->min_inner_key = table_.begin()->first;
   meta_data->max_inner_key = table_.rbegin()->first;
   meta_data->num_keys = (int)table_.size();
+  meta_data->max_seq = max_seq;
   /* 目前 minor compaction 生成的 sstable 就放在 l0 */
   meta_data->belong_to_level = sstable_level;
   *meta_data_pointer = meta_data;

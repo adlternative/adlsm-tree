@@ -611,11 +611,11 @@ RC ParseWalFile(string_view filename, int64_t &seq) {
 std::string WritAbleFile::GetPath() { return file_path_; }
 std::ostream &operator<<(ostream &os, const FileMetaData &meta) {
   os << fmt::format(
-      "@FileMetaData[ file_size={}, num_keys={}, belong_to_level={}, "
+      "@FileMetaData[ file_size={}, num_keys={}, max_seq={}, belong_to_level={}, "
       "max_inner_key={} "
       "min_inner_key={}, sha256={} ]\n",
-      meta.file_size, meta.num_keys, meta.belong_to_level, meta.max_inner_key,
-      meta.min_inner_key, sha256_digit_to_hex(meta.sha256));
+      meta.file_size, meta.num_keys, meta.max_seq, meta.belong_to_level,
+      meta.max_inner_key, meta.min_inner_key, sha256_digit_to_hex(meta.sha256));
   return os;
 }
 }  // namespace adl

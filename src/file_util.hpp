@@ -1,6 +1,7 @@
 #ifndef ADL_LSM_TREE_FILE_UTIL_H__
 #define ADL_LSM_TREE_FILE_UTIL_H__
 
+#include <fmt/ostream.h>
 #include <openssl/sha.h>
 #include <functional>
 #include <string>
@@ -8,7 +9,6 @@
 #include <vector>
 #include "keys.hpp"
 #include "rc.hpp"
-#include <fmt/ostream.h>
 
 namespace adl {
 
@@ -147,11 +147,12 @@ class RandomAccessFile {
  * @brief 文件元数据
  */
 struct FileMetaData {
-  FileMetaData() : file_size(0), num_keys(0), belong_to_level(-1) {}
+  FileMetaData() : file_size(0), num_keys(0), belong_to_level(-1), max_seq(0) {}
 
   size_t file_size;
   int num_keys;
   int belong_to_level;
+  int64_t max_seq;
   MemKey max_inner_key;
   MemKey min_inner_key;
   unsigned char sha256[SHA256_DIGEST_LENGTH];

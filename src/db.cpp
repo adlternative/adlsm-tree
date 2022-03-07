@@ -427,7 +427,7 @@ struct MergeCmp {
 
 RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
   RC rc = OK;
-  int count = 0;
+
   priority_queue<SSTableReader::Iterator, vector<SSTableReader::Iterator>,
                  MergeCmp>
       iter_pq;
@@ -457,7 +457,8 @@ RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
   auto merge_sstable_writer = std::move(sstable_ok.value());
 
   string last_key;
-
+  int count = 0;
+  int64_t max_seq = 0;
   MemKey max_key;
   MemKey min_key;
 
@@ -476,6 +477,7 @@ RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
       if (rc) return rc;
       /* 记录第一个 key 后面需要保存 */
       if (!count) min_key.FromKey(cur_key);
+      max_seq = max(max_seq, InnerKeySeq(cur_key));
       count++;
     }
 
@@ -499,7 +501,7 @@ RC DB::MergeRuns(const Level &level, FileMetaData **meta_data_pointer) {
   meta_data->num_keys = count;
   /* 目前 minor compaction 生成的 sstable 就放在 l0 */
   meta_data->belong_to_level = level.GetLevel() + 1;
-
+  meta_data->max_seq = max_seq;
   MLog->info("DB merge runs to {}", *meta_data);
 
   *meta_data_pointer = meta_data;

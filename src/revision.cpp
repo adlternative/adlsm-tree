@@ -88,6 +88,7 @@ RC Level::BuildFile(string_view dbname) {
   SHA256_Update(&sha256_, &file_num, sizeof(int));
   /* file meta [num_keys, min-key-size, min-key, max-key-size, max-key] */
   for (auto &file : files_meta_) {
+    int64_t max_seq = file->max_seq;
     int num_keys = file->num_keys;
     string min_inner_key = file->min_inner_key.ToKey();
     int min_inner_key_size = (int)min_inner_key.size();
@@ -95,12 +96,15 @@ RC Level::BuildFile(string_view dbname) {
     int max_inner_key_size = (int)max_inner_key.size();
     string file_oid = sha256_digit_to_hex(file->sha256);
 
+    MLog->debug("max_seq: {}", num_keys);
     MLog->debug("num_keys: {}", num_keys);
     MLog->debug("min_inner_key: {}", file->min_inner_key);
     MLog->debug("max_inner_key: {}", file->max_inner_key);
 
     temp_level_file->Append({(char *)&num_keys, sizeof(int)});
     SHA256_Update(&sha256_, (char *)&num_keys, sizeof(int));
+    temp_level_file->Append({(char *)&max_seq, sizeof(int64_t)});
+    SHA256_Update(&sha256_, (char *)&max_seq, sizeof(int64_t));
     temp_level_file->Append({(char *)&min_inner_key_size, sizeof(int)});
     SHA256_Update(&sha256_, (char *)&min_inner_key_size, sizeof(int));
     temp_level_file->Append(min_inner_key);
@@ -173,6 +177,7 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
   const char *cur_pointer = buffer.data();
   const char *end_pointer = buffer.data() + buffer.size();
   for (int i = 0; i < file_num; i++) {
+    int64_t max_seq;
     int num_keys;
     int min_key_len;
     int max_key_len;
@@ -188,6 +193,15 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
     Decode32(cur_pointer, &num_keys);
     cur_pointer += sizeof(int);
     MLog->debug("num_keys {}", num_keys);
+
+    if (cur_pointer + sizeof(int64_t) > end_pointer) {
+      rc = BAD_LEVEL;
+      return rc;
+    }
+
+    Decode64(cur_pointer, &max_seq);
+    cur_pointer += sizeof(int64_t);
+    MLog->debug("max_seq {}", max_seq);
 
     if (cur_pointer + sizeof(int) > end_pointer) {
       rc = BAD_LEVEL;
@@ -234,6 +248,7 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
     hex_to_sha256_digit(sha256_hex, file_meta->sha256);
     file_meta->belong_to_level = level_;
     file_meta->num_keys = num_keys;
+    file_meta->max_seq = max_seq;
     file_meta->min_inner_key.FromKey(min_key);
     file_meta->max_inner_key.FromKey(max_key);
     if (rc = FileManager::GetFileSize(file_meta->GetSSTablePath(dbname),
@@ -295,10 +310,9 @@ RC Level::Get(string_view key, string &value, int64_t seq) {
 }
 
 int64_t Level::GetMaxSeq() {
-  if (files_meta_.empty()) return 0;
-  auto back = files_meta_.end();
-  back--;
-  return back->get()->max_inner_key.seq_;
+  int64_t seq = 0;
+  for (auto &file : files_meta_) seq = max(seq, file->max_seq);
+  return seq;
 }
 
 Revision::Revision(DB *db, vector<Level> &&levels,

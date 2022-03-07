@@ -19,4 +19,6 @@ int DecodeWithPreLen(string &dest, string_view data) {
   return len + sizeof(int);
 }
 
+void Decode64(const char *src, int64_t *dest) { *dest = *(int64_t *)(src); }
+
 }  // namespace adl

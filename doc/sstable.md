@@ -39,6 +39,11 @@
 | RESTART POINT 2    |
 | RESTART POINTS LEN |
 
+| Entry Format                                                           |
+| ---------------------------------------------------------------------- |
+| SHARED_KEY_LEN UNSHARED_KEY_LEN `USER_KEY SEQ OP_TYPE` VALUE_LEN VALUE |
+
+
 过滤器块 filter block
 
 | Filter Block Format    |
