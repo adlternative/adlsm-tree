@@ -167,18 +167,18 @@ RC DB::Get(string_view key, std::string &value) {
   auto mem = mem_;
   auto imem = imem_;
   auto current_rev = current_rev_;
+  auto current_seq = sequence_id_.load(std::memory_order::relaxed);
 
-  // int64_t sequence_id_ = INT64_MAX;
   lock.unlock();
   /* 1. memtable */
-  rc = mem->Get(key, value);
+  rc = mem->Get(key, value, current_seq);
   if (!rc) {
     MLog->debug("Get key {} hit in memtable", key);
     return rc;
   }
   /* 2. imemtable */
   if (imem) {
-    rc = imem->GetNoLock(key, value);
+    rc = imem->GetNoLock(key, value, current_seq);
     if (!rc) {
       MLog->debug("Get key {} hit in imemtable", key);
       return rc;
@@ -186,7 +186,7 @@ RC DB::Get(string_view key, std::string &value) {
   }
 
   /* 3 L0 sstable | L1-LN sstable 需要依赖于版本控制 元数据管理 */
-  rc = current_rev->Get(key, value);
+  rc = current_rev->Get(key, value, current_seq);
   if (!rc) {
     MLog->debug("Get key {} value {} hint in current rev {}", key, value,
                 current_rev->GetOid());

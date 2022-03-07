@@ -31,16 +31,15 @@ RC MemTable::PutTeeWAL(const MemKey &key, string_view value) {
   rc = Put(key, value);
   return rc;
 }
-
-RC MemTable::Get(string_view key, string &value) {
+RC MemTable::Get(string_view key, string &value, int64_t seq) {
   shared_lock<shared_mutex> lock(mu_);
-  return GetNoLock(key, value);
+  return GetNoLock(key, value, seq);
 }
 
-RC MemTable::GetNoLock(string_view key, string &value) {
-  auto min_key = MemKey::NewMinMemKey(key);
+RC MemTable::GetNoLock(string_view key, string &value, int64_t seq) {
+  MemKey look_key(key, seq);
 
-  auto iter = table_.lower_bound(min_key);
+  auto iter = table_.lower_bound(look_key);
   if (iter == table_.end()) return NOT_FOUND;
 
   if (key == iter->first.user_key_ &&

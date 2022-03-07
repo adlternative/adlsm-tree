@@ -23,7 +23,7 @@ class Object {
   virtual ~Object() = default;
   virtual RC BuildFile(string_view dbname) = 0;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) = 0;
-  virtual RC Get(string_view key, string &value) = 0;
+  virtual RC Get(string_view key, string &value, int64_t seq = INT64_MAX) = 0;
 
   string GetOid() const;
   void Clear() {
@@ -89,7 +89,8 @@ class Level : public Object {
   virtual ~Level() = default;
   virtual RC BuildFile(string_view dbname) override;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
-  virtual RC Get(string_view key, std::string &value) override;
+  virtual RC Get(string_view key, std::string &value,
+                 int64_t seq = INT64_MAX) override;
 
   void Insert(FileMetaData *file_meta);
   void Erase(FileMetaData *file_meta);
@@ -138,7 +139,8 @@ class Revision : public Object {
   virtual ~Revision() = default;
   virtual RC BuildFile(string_view dbname) override;
   virtual RC LoadFromFile(string_view dbname, string_view sha_hex) override;
-  virtual RC Get(string_view key, std::string &value) override;
+  virtual RC Get(string_view key, std::string &value,
+                 int64_t seq = INT64_MAX) override;
 
   const vector<Level> &GetLevels() const;
   const Level &GetLevel(int i) const;

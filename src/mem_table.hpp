@@ -43,8 +43,8 @@ class MemTable {
   RC Put(const MemKey &key, string_view value);
   RC PutTeeWAL(const MemKey &key, string_view value);
 
-  RC Get(string_view key, string &value);
-  RC GetNoLock(string_view key, string &value);
+  RC Get(string_view key, string &value, int64_t seq = INT64_MAX);
+  RC GetNoLock(string_view key, string &value, int64_t seq = INT64_MAX);
   RC ForEachNoLock(
       std::function<RC(const MemKey &key, string_view value)> &&func);
   RC BuildSSTable(string_view dbname, FileMetaData **meta_data_pointer);

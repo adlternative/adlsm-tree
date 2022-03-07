@@ -247,9 +247,9 @@ RC Level::LoadFromFile(string_view dbname, string_view lvl_sha_hex) {
   return rc;
 }
 
-RC Level::Get(string_view key, string &value) {
+RC Level::Get(string_view key, string &value, int64_t seq) {
   RC rc = NOT_FOUND;
-  MemKey mk = MemKey::NewMinMemKey(key);
+  MemKey mk(key, seq);
   string inner_key = mk.ToKey();
   string result_key;
   string result_value;
@@ -374,7 +374,7 @@ Revision::Revision(DB *db) : Object(db) {
   for (int i = 0; i < 5; ++i) levels_.emplace_back(db, i);
 }
 
-RC Revision::Get(string_view key, std::string &value) {
+RC Revision::Get(string_view key, std::string &value, int64_t seq) {
   RC rc = NOT_FOUND;
   for (int i = 0; i < 5 && rc == NOT_FOUND; ++i) {
     if (levels_[i].Empty()) continue;
